@@ -16,7 +16,7 @@ async def create_workflow(workflow: dict):
     return await WorkflowService.create_workflow(workflow)
 
 
-@router.post("/claims/{claim_id}/workflow/start")
+@router.post("/claims/{claim_id}/workflow/execute")
 async def start_claim_workflow(claim_id: int):
     return await WorkflowService.start_claim_workflow(claim_id)
 
