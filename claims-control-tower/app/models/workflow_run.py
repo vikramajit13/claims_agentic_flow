@@ -30,7 +30,7 @@ class WorkflowRun(BaseModel):
     claim_id: int = Field(..., description="ID of the claim associated with this workflow run")
     workflow_name: str = Field(..., description="Name of the workflow being executed")
     status: WorkflowRunStatus = Field(..., description="Current status of the workflow run (e.g., 'pending', 'in_progress', 'completed', 'failed')")
-    current_step: Optional[WorkflowRunStep] = Field(None, description="Current step being executed in the workflow")
+    current_step: WorkflowRunStep = Field(..., description="Current step being executed in the workflow")
     started_at: Optional[str] = Field(None, description="Timestamp when the workflow run started")
     completed_at: Optional[str] = Field(None, description="Timestamp when the workflow run completed")
     last_error: Optional[str] = Field(None, description="Error message if the workflow run failed")

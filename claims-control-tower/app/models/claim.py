@@ -17,17 +17,17 @@ class ClaimStatus(str, Enum):
 
 
 class Claim(BaseModel):
-    id: Optional[int] = Field(None, description="Unique identifier for the claim")
+    id: int = Field(..., description="Unique identifier for the claim")
     claim_number: str = Field(..., description="Unique claim number")
     customer_id: int = Field(..., description="ID of the customer making the claim")
     policy_id: int = Field(..., description="ID of the insurance policy related to the claim")
     claim_type: str = Field(..., description="Type of the claim (e.g., 'auto', 'home', 'health')")
     claim_amount: float = Field(..., description="Amount claimed")
     incident_date: str = Field(..., description="Date of the incident (YYYY-MM-DD)")
-    description: Optional[str] = Field(None, description="Description of the incident")
-    status: ClaimStatus = Field(..., description="Current status of the claim (e.g., 'pending', 'approved', 'rejected')")
-    created_at: Optional[str] = Field(None, description="Timestamp when the claim was created")
-    updated_at: Optional[str] = Field(None, description="Timestamp when the claim was last updated")
+    description: str = Field(..., description="Description of the incident")
+    status: ClaimStatus = Field(default=ClaimStatus.SUBMITTED, description="Current status of the claim (e.g., 'pending', 'approved', 'rejected')")
+    created_at: str = Field(..., description="Timestamp when the claim was created")
+    updated_at: str = Field(..., description="Timestamp when the claim was last updated")
 
 
 
