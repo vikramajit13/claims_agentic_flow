@@ -1,16 +1,16 @@
 
 from pydantic import BaseModel, Field
 from typing import Optional
-from enum import Enum   
+from enum import StrEnum   
 
-class PaymentInstructionStatus(str, Enum):
+class PaymentInstructionStatus(StrEnum):
     PENDING = "pending"
     READY_FOR_PAYMENT = "ready_for_payment"
     BLOCKED = "blocked"
     SENT = "sent"
     FAILED = "failed"
-    
-class PaymentGuardrailStatus(str, Enum):
+
+class PaymentGuardrailStatus(StrEnum):
     PASSED = "passed"
     FAILED = "failed"
     REQUIRES_APPROVAL = "requires_approval"
