@@ -1,11 +1,15 @@
+from enum import Enum
 
 from pydantic import BaseModel, Field
-from typing import Optional
-from enum import Enum   
+
 
 class WorkflowEventType(str, Enum):
     CLAIM_SUBMITTED = "claim_submitted"
     WORKFLOW_STARTED = "workflow_started"
+    WORKFLOW_PAUSED = "workflow_paused"
+    WORKFLOW_RESUMED = "workflow_resumed"
+    WORKFLOW_WAITING_FOR_HUMAN = "workflow_waiting_for_human"
+    WORKFLOW_WAITING_FOR_INFO = "workflow_waiting_for_info"
     STEP_STARTED = "step_started"
     STEP_COMPLETED = "step_completed"
     STEP_FAILED = "step_failed"
@@ -19,20 +23,22 @@ class WorkflowEventType(str, Enum):
     PAYMENT_GUARDRAIL_FAILED = "payment_guardrail_failed"
     PAYMENT_INSTRUCTION_CREATED = "payment_instruction_created"
     WORKFLOW_COMPLETED = "workflow_completed"
-    
-class ACTOR_TYPE(str, Enum):
+
+
+class ActorType(str, Enum):
     SYSTEM = "system"
     RULE_ENGINE = "rule_engine"
     HUMAN_REVIEWER = "human_reviewer"
     PAYMENT_SERVICE = "payment_service"
 
+
 class WorkflowEvent(BaseModel):
     id: int = Field(..., description="Unique identifier for the workflow event")
     workflow_run_id: int = Field(..., description="Unique identifier for the workflow run")
     claim_id: int = Field(..., description="Unique identifier for the claim")
-    event_type: WorkflowEventType = Field(default=WorkflowEventType.STEP_STARTED, description="Type of the workflow event (e.g., 'step_started', 'step_completed')")
+    event_type: WorkflowEventType = Field(..., description="Type of the workflow event")
     step_name: str = Field(..., description="Name of the workflow step")
-    actor_type: ACTOR_TYPE = Field(default=ACTOR_TYPE.SYSTEM, description="Type of actor triggering the event")
-    actor_id: str = Field(..., description="Identifier for the actor (e.g., user ID, system component name)")
+    actor_type: ActorType = Field(default=ActorType.SYSTEM, description="Type of actor triggering the event")
+    actor_id: str = Field(..., description="Identifier for the actor")
     event_payload: dict = Field(..., description="Additional data related to the event")
     created_at: str = Field(..., description="Timestamp when the event was created")

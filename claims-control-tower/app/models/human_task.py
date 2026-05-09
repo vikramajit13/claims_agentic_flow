@@ -1,14 +1,16 @@
+from enum import Enum
+from typing import Optional
 
 from pydantic import BaseModel, Field
-from typing import Optional
-from enum import Enum
+
 
 class HumanTaskStatus(str, Enum):
-  OPEN = "open"
-  IN_PROGRESS = "in_progress"
-  COMPLETED = "completed"
-  CANCELLED = "cancelled"
-  
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
 class HumanTaskType(str, Enum):
     CLAIM_REVIEW = "claim_review"
     FRAUD_REVIEW = "fraud_review"

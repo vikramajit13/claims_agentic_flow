@@ -1,1 +1,11 @@
-
+services:
+  claims-control-tower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claims-control-tower
+    ports:
+      - "8000:8000"
+    environment:
+      PYTHONPATH: /app
+    restart: unless-stopped

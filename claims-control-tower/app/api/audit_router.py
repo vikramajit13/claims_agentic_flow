@@ -1,12 +1,11 @@
+from fastapi import APIRouter
 
-from fastapi import APIRouter, Depends
-from app.services.workflow_service import WorkflowService   
+from app.services.audit_service import AuditService
 
-router = APIRouter(
-    prefix="/v1",
-    tags=["audit"]
-)       
+router = APIRouter(prefix="/v1/audit", tags=["audit"])
+audit_service = AuditService()
 
-@router.get("/claims/{claim_id}/audit")
-async def get_claim_audit(claim_id: int):
-    return await WorkflowService.get_claim_audit(claim_id)
+
+@router.get("/claims/{claim_id}")
+def get_claim_audit(claim_id: int):
+    return audit_service.get_claim_audit(claim_id)

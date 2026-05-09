@@ -1,27 +1,31 @@
+from fastapi import APIRouter, HTTPException
 
-from fastapi import APIRouter
+from app.schemas.human_task_schema import HumanTaskCompletionResponse, HumanTaskDecisionRequest
+from app.services.human_task_service import HumanTaskService
+from app.services.workflow_service import WorkflowService
 
-router = APIRouter(
-    prefix="/v1",
-    tags=["human_tasks"]
-)
+router = APIRouter(prefix="/v1/human-tasks", tags=["human_tasks"])
+task_service = HumanTaskService()
+workflow_service = WorkflowService()
 
-@router.get("/human-tasks")
-async def get_human_tasks():
-    # Logic to retrieve human tasks from the database or other source
-    tasks = [
-        {"id": 1, "name": "Review Claim", "status": "pending"},
-        {"id": 2, "name": "Approve Payment", "status": "completed"},
-    ]
-    return tasks
 
-@router.get("/human-tasks/{task_id}")
-async def get_human_task(task_id: int):
-    # Logic to retrieve a specific human task by ID from the database or other source
-    task = {"id": task_id, "name": "Review Claim", "status": "pending"}
-    return task
+@router.get("")
+def get_human_tasks():
+    return task_service.list_tasks()
 
-@router.post("/human-tasks/{task_id}/complete")
-async def complete_human_task(task_id: int):
-    # Logic to mark a human task as complete in the database or other source
-    return {"message": f"Task {task_id} completed"}
+
+@router.get("/{task_id}")
+def get_human_task(task_id: int):
+    try:
+        return task_service.get_task(task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Human task not found") from exc
+
+
+@router.post("/{task_id}/complete", response_model=HumanTaskCompletionResponse)
+def complete_human_task(task_id: int, request: HumanTaskDecisionRequest):
+    try:
+        task, workflow_result = workflow_service.complete_human_task(task_id, request)
+        return HumanTaskCompletionResponse(task=task, workflow_result=workflow_result)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Human task not found") from exc
