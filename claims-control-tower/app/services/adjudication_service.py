@@ -16,6 +16,7 @@ class AdjudicationService:
             reason="; ".join(reasons),
             recommended_amount=0.0,
             requires_human_review=False,
+            risk_factors=reasons,
         )
 
     def recommend(
@@ -34,6 +35,8 @@ class AdjudicationService:
                 reason="Missing required evidence",
                 recommended_amount=0.0,
                 requires_human_review=False,
+                risk_factors=evidence_result.missing_documents,
+                recommended_action="REQUEST_ADDITIONAL_EVIDENCE",
             )
 
         if risk_result.risk_level.value == "HIGH":
@@ -42,6 +45,8 @@ class AdjudicationService:
                 reason="High fraud risk score",
                 recommended_amount=claim.claim_amount,
                 requires_human_review=True,
+                risk_factors=risk_result.risk_factors,
+                recommended_action="FRAUD_REVIEW_REQUIRED",
             )
 
         if claim.claim_amount > settings.payment_approval_threshold:
@@ -50,6 +55,8 @@ class AdjudicationService:
                 reason="Claim amount exceeds payment approval threshold",
                 recommended_amount=claim.claim_amount,
                 requires_human_review=True,
+                risk_factors=["Claim amount exceeds payment approval threshold"],
+                recommended_action="PAYMENT_REVIEW_REQUIRED",
             )
 
         return AdjudicationRecommendation(
@@ -57,4 +64,5 @@ class AdjudicationService:
             reason="Claim passed automated checks",
             recommended_amount=claim.claim_amount,
             requires_human_review=False,
+            recommended_action="AUTO_APPROVE",
         )

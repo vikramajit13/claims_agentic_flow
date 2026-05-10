@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel, Field
 from enum import Enum
 
@@ -21,5 +20,6 @@ class ClaimDocument(BaseModel):
     document_type: DocumentType = Field(default=DocumentType.PHOTO, description="Type of the document (e.g., 'photo', 'report', 'invoice')")
     file_name: str = Field(..., description="Name of the file")
     storage_url: str = Field(..., description="URL where the document is stored")
+    document_metadata: dict = Field(default_factory=dict, description="Structured document metadata")
     verification_status: DocumentVerificationStatus = Field(default=DocumentVerificationStatus.PENDING, description="Verification status of the document (e.g., 'pending', 'approved', 'rejected')")
     created_at: str = Field(..., description="Timestamp when the document was created")

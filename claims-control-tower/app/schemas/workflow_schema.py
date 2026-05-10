@@ -28,11 +28,20 @@ class FraudRiskResult(BaseModel):
     risk_factors: list[str] = Field(default_factory=list)
 
 
+class RiskSignalResult(BaseModel):
+    requires_human_review: bool
+    reason: str
+    risk_factors: list[str] = Field(default_factory=list)
+    recommended_action: str = "NONE"
+
+
 class AdjudicationRecommendation(BaseModel):
     recommendation: RecommendationDecision
     reason: str
     recommended_amount: float
     requires_human_review: bool
+    risk_factors: list[str] = Field(default_factory=list)
+    recommended_action: str | None = None
 
 
 class WorkflowExecutionResponse(BaseModel):
@@ -40,6 +49,9 @@ class WorkflowExecutionResponse(BaseModel):
     recommendation: Optional[AdjudicationRecommendation] = None
     payment_instruction_id: Optional[int] = None
     human_task_id: Optional[int] = None
+    claim_status: Optional[str] = None
+    final_decision: Optional[str] = None
+    final_approved_amount: Optional[float] = None
 
 
 class WorkflowRunDetail(BaseModel):

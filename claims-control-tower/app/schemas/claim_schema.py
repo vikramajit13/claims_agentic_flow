@@ -10,6 +10,7 @@ class DocumentUpload(BaseModel):
     document_type: DocumentType
     file_name: str
     storage_url: str
+    document_metadata: dict = Field(default_factory=dict)
 
 
 class ClaimCreateRequest(BaseModel):

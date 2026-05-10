@@ -39,6 +39,7 @@ class ClaimService:
                 document_type=document.document_type,
                 file_name=document.file_name,
                 storage_url=document.storage_url,
+                document_metadata=document.document_metadata,
                 verification_status=DocumentVerificationStatus.PENDING,
                 created_at=now,
             )

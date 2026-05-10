@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from app.enums import RecommendationDecision
+from app.enums import HumanDecision, RecommendationDecision
 from app.models.claim import ClaimStatus
+from app.models.human_task import HumanTaskPriority, HumanTaskType
 from app.models.workflow_event import ActorType, WorkflowEventType
 from app.models.workflow_run import WorkflowRunStep
 from app.repositories.claim_repository import ClaimRepository
@@ -25,6 +26,7 @@ from app.services.human_task_service import HumanTaskService
 from app.services.payment_adapter import PaymentAdapter
 from app.services.payment_guardrail_service import PaymentGuardrailService
 from app.services.policy_admin_adapter import PolicyAdminAdapter
+from app.services.risk_signal_service import RiskSignalService
 
 
 class WorkflowService:
@@ -42,6 +44,7 @@ class WorkflowService:
         self.human_task_service = HumanTaskService(self.human_task_repo)
         self.payment_guardrail_service = PaymentGuardrailService()
         self.payment_adapter = PaymentAdapter(self.payment_repo)
+        self.risk_signal_service = RiskSignalService()
         self.audit = AuditService()
 
     def start_claim_workflow(self, claim_id: int) -> WorkflowExecutionResponse:
@@ -125,6 +128,18 @@ class WorkflowService:
                 risk_result.dict(),
             )
 
+            claim_documents = self.claim_service.get_claim_documents(claim.id)
+            prior_12_month_claims = self.claims_system.get_claims_for_customer_last_12_months(
+                claim.customer_id,
+                claim.incident_date,
+                exclude_claim_id=claim.id,
+            )
+            risk_signal_result = self.risk_signal_service.evaluate(
+                claim,
+                claim_documents,
+                len(prior_12_month_claims),
+            )
+
             workflow_run = self.workflow_repo.update_step(workflow_run.id, WorkflowRunStep.ADJUDICATION)
             recommendation = self.adjudication_service.recommend(
                 claim=claim,
@@ -139,6 +154,30 @@ class WorkflowService:
                 recommendation.dict(),
             )
 
+            if risk_signal_result.requires_human_review:
+                recommendation = AdjudicationRecommendation(
+                    recommendation=RecommendationDecision.REFER_TO_HUMAN,
+                    reason=risk_signal_result.reason,
+                    recommended_amount=claim.claim_amount,
+                    requires_human_review=True,
+                    risk_factors=risk_signal_result.risk_factors,
+                    recommended_action=risk_signal_result.recommended_action,
+                )
+                self.audit.record_event(
+                    workflow_run,
+                    WorkflowEventType.RECOMMENDATION_CREATED,
+                    WorkflowRunStep.ADJUDICATION.value,
+                    recommendation.dict(),
+                )
+                return self._pause_for_human_review(
+                    workflow_run=workflow_run,
+                    claim_id=claim.id,
+                    task_type=HumanTaskType.PAYMENT_REVIEW,
+                    reason=recommendation.reason,
+                    risk_factors=recommendation.risk_factors,
+                    recommendation=recommendation,
+                )
+
             if recommendation.recommendation == RecommendationDecision.REQUEST_MORE_INFO:
                 self.claims_system.update_claim_status(claim.id, ClaimStatus.PENDING_MORE_INFO)
                 workflow_run = self.workflow_repo.mark_waiting_for_info(workflow_run.id)
@@ -151,26 +190,16 @@ class WorkflowService:
                 return WorkflowExecutionResponse(workflow_run=workflow_run, recommendation=recommendation)
 
             if recommendation.requires_human_review:
-                workflow_run = self.workflow_repo.update_step(workflow_run.id, WorkflowRunStep.HUMAN_REVIEW)
-                task = self.human_task_service.create_task(claim.id, workflow_run.id, recommendation)
-                workflow_run = self.workflow_repo.mark_waiting_for_human(workflow_run.id)
-                self.claims_system.update_claim_status(claim.id, ClaimStatus.PENDING_HUMAN_REVIEW)
-                self.audit.record_event(
-                    workflow_run,
-                    WorkflowEventType.HUMAN_TASK_CREATED,
-                    WorkflowRunStep.HUMAN_REVIEW.value,
-                    task.dict(),
-                )
-                self.audit.record_event(
-                    workflow_run,
-                    WorkflowEventType.WORKFLOW_WAITING_FOR_HUMAN,
-                    WorkflowRunStep.HUMAN_REVIEW.value,
-                    {"human_task_id": task.id},
-                )
-                return WorkflowExecutionResponse(
+                task_type = HumanTaskType.FRAUD_REVIEW
+                if recommendation.recommended_action == "PAYMENT_REVIEW_REQUIRED":
+                    task_type = HumanTaskType.PAYMENT_REVIEW
+                return self._pause_for_human_review(
                     workflow_run=workflow_run,
+                    claim_id=claim.id,
+                    task_type=task_type,
+                    reason=recommendation.reason,
+                    risk_factors=recommendation.risk_factors,
                     recommendation=recommendation,
-                    human_task_id=task.id,
                 )
 
             self.claims_system.update_claim_status(claim.id, ClaimStatus.APPROVED)
@@ -206,7 +235,13 @@ class WorkflowService:
         return self.execute(workflow_run.id)
 
     def complete_human_task(self, task_id: int, request: HumanTaskDecisionRequest):
-        task = self.human_task_service.complete_task(task_id, request.decision, request.decision_notes)
+        task = self.human_task_service.complete_task(
+            task_id,
+            request.decision,
+            request.decision_notes,
+            request.completed_by,
+            request.approved_amount,
+        )
         workflow_run = self.workflow_repo.resume(task.workflow_run_id)
         self.audit.record_event(
             workflow_run,
@@ -214,7 +249,7 @@ class WorkflowService:
             WorkflowRunStep.HUMAN_REVIEW.value,
             task.dict(),
             actor_type=ActorType.HUMAN_REVIEWER,
-            actor_id=request.reviewer_id,
+            actor_id=request.completed_by,
         )
         result = self.resume_from_human_decision(task.id, request)
         return task, result
@@ -228,7 +263,7 @@ class WorkflowService:
         workflow_run = self.workflow_repo.resume(task.workflow_run_id)
         claim = self.claim_repo.get(task.claim_id)
 
-        if request.decision.upper() == RecommendationDecision.REJECT.value:
+        if request.decision == HumanDecision.REJECT:
             self.claims_system.update_claim_status(claim.id, ClaimStatus.REJECTED)
             workflow_run = self.workflow_repo.complete(workflow_run.id)
             recommendation = AdjudicationRecommendation(
@@ -243,9 +278,15 @@ class WorkflowService:
                 WorkflowRunStep.COMPLETED.value,
                 {"outcome": "rejected_after_human_review"},
             )
-            return WorkflowExecutionResponse(workflow_run=workflow_run, recommendation=recommendation)
+            return WorkflowExecutionResponse(
+                workflow_run=workflow_run,
+                recommendation=recommendation,
+                claim_status=ClaimStatus.REJECTED.value,
+                final_decision=RecommendationDecision.REJECT.value,
+                final_approved_amount=0.0,
+            )
 
-        if request.decision.upper() == RecommendationDecision.REQUEST_MORE_INFO.value:
+        if request.decision == HumanDecision.REQUEST_MORE_INFO:
             self.claims_system.update_claim_status(claim.id, ClaimStatus.PENDING_MORE_INFO)
             workflow_run = self.workflow_repo.mark_waiting_for_info(workflow_run.id)
             recommendation = AdjudicationRecommendation(
@@ -260,13 +301,42 @@ class WorkflowService:
                 WorkflowRunStep.HUMAN_REVIEW.value,
                 recommendation.dict(),
             )
-            return WorkflowExecutionResponse(workflow_run=workflow_run, recommendation=recommendation)
+            return WorkflowExecutionResponse(
+                workflow_run=workflow_run,
+                recommendation=recommendation,
+                claim_status=ClaimStatus.PENDING_MORE_INFO.value,
+                final_decision=RecommendationDecision.REQUEST_MORE_INFO.value,
+            )
+
+        if request.decision == HumanDecision.ESCALATE:
+            recommendation = AdjudicationRecommendation(
+                recommendation=RecommendationDecision.REFER_TO_HUMAN,
+                reason=request.decision_notes or "Escalated for additional human review",
+                recommended_amount=request.approved_amount or task.recommended_payout_amount or claim.claim_amount,
+                requires_human_review=True,
+                risk_factors=task.risk_factors,
+                recommended_action="ADDITIONAL_REVIEW_REQUIRED",
+            )
+            return self._pause_for_human_review(
+                workflow_run=workflow_run,
+                claim_id=claim.id,
+                task_type=HumanTaskType.CLAIM_REVIEW,
+                reason=recommendation.reason,
+                risk_factors=recommendation.risk_factors,
+                recommendation=recommendation,
+            )
+
+        approved_amount = request.approved_amount or task.recommended_payout_amount or claim.claim_amount
+        if request.decision == HumanDecision.MODIFY_PAYOUT and request.approved_amount is None:
+            raise ValueError("approved_amount is required when decision is MODIFY_PAYOUT")
 
         recommendation = AdjudicationRecommendation(
             recommendation=RecommendationDecision.APPROVE,
             reason=request.decision_notes or "Approved by human reviewer",
-            recommended_amount=claim.claim_amount,
+            recommended_amount=approved_amount,
             requires_human_review=False,
+            risk_factors=task.risk_factors,
+            recommended_action="HUMAN_APPROVED",
         )
         self.claims_system.update_claim_status(claim.id, ClaimStatus.APPROVED)
         return self._continue_to_payment(workflow_run.id, recommendation, has_human_approval=True)
@@ -296,6 +366,23 @@ class WorkflowService:
         )
 
         if not guardrail_result.passed:
+            if not has_human_approval:
+                recommendation = AdjudicationRecommendation(
+                    recommendation=RecommendationDecision.REFER_TO_HUMAN,
+                    reason="Payment review required",
+                    recommended_amount=recommendation.recommended_amount,
+                    requires_human_review=True,
+                    risk_factors=guardrail_result.reasons,
+                    recommended_action="PAYMENT_REVIEW_REQUIRED",
+                )
+                return self._pause_for_human_review(
+                    workflow_run=workflow_run,
+                    claim_id=claim.id,
+                    task_type=HumanTaskType.PAYMENT_REVIEW,
+                    reason="Payment review required",
+                    risk_factors=guardrail_result.reasons,
+                    recommendation=recommendation,
+                )
             self.claims_system.update_claim_status(claim.id, ClaimStatus.PAYMENT_BLOCKED)
             workflow_run = self.workflow_repo.complete(workflow_run.id)
             self.audit.record_event(
@@ -310,7 +397,13 @@ class WorkflowService:
                 WorkflowRunStep.COMPLETED.value,
                 {"outcome": "payment_blocked"},
             )
-            return WorkflowExecutionResponse(workflow_run=workflow_run, recommendation=recommendation)
+            return WorkflowExecutionResponse(
+                workflow_run=workflow_run,
+                recommendation=recommendation,
+                claim_status=ClaimStatus.PAYMENT_BLOCKED.value,
+                final_decision=RecommendationDecision.APPROVE.value,
+                final_approved_amount=recommendation.recommended_amount,
+            )
 
         self.audit.record_event(
             workflow_run,
@@ -352,6 +445,9 @@ class WorkflowService:
             workflow_run=workflow_run,
             recommendation=recommendation,
             payment_instruction_id=payment_instruction.id,
+            claim_status=ClaimStatus.PAYMENT_READY.value,
+            final_decision=RecommendationDecision.APPROVE.value,
+            final_approved_amount=recommendation.recommended_amount,
         )
 
     def get_workflow_run(self, workflow_run_id: int) -> WorkflowRunDetail:
@@ -373,3 +469,52 @@ class WorkflowService:
 
     def get_payment_instruction(self, payment_instruction_id: int) -> PaymentInstructionResponse:
         return PaymentInstructionResponse(payment_instruction=self.payment_repo.get(payment_instruction_id))
+
+    def _pause_for_human_review(
+        self,
+        workflow_run,
+        claim_id: int,
+        task_type: HumanTaskType,
+        reason: str,
+        risk_factors: list[str],
+        recommendation: AdjudicationRecommendation,
+    ) -> WorkflowExecutionResponse:
+        workflow_run = self.workflow_repo.update_step(workflow_run.id, WorkflowRunStep.HUMAN_REVIEW)
+        workflow_run = self.workflow_repo.mark_waiting_for_human(workflow_run.id)
+        self.claims_system.update_claim_status(claim_id, ClaimStatus.PENDING_HUMAN_REVIEW)
+        task = self.human_task_service.create_task(
+            claim_id=claim_id,
+            workflow_run_id=workflow_run.id,
+            recommendation=recommendation,
+            task_type=task_type,
+            priority=HumanTaskPriority.HIGH,
+            assigned_to=None,
+            created_reason=reason,
+            risk_factors=risk_factors,
+        )
+        self.audit.record_event(
+            workflow_run,
+            WorkflowEventType.HUMAN_TASK_CREATED,
+            WorkflowRunStep.HUMAN_REVIEW.value,
+            task.dict(),
+        )
+        self.audit.record_event(
+            workflow_run,
+            WorkflowEventType.WORKFLOW_PAUSED,
+            WorkflowRunStep.HUMAN_REVIEW.value,
+            {"reason": reason, "task_id": task.id, "risk_factors": risk_factors},
+        )
+        self.audit.record_event(
+            workflow_run,
+            WorkflowEventType.WORKFLOW_WAITING_FOR_HUMAN,
+            WorkflowRunStep.HUMAN_REVIEW.value,
+            {"human_task_id": task.id},
+        )
+        return WorkflowExecutionResponse(
+            workflow_run=workflow_run,
+            recommendation=recommendation,
+            human_task_id=task.id,
+            claim_status=ClaimStatus.PENDING_HUMAN_REVIEW.value,
+            final_decision=recommendation.recommendation.value,
+            final_approved_amount=recommendation.recommended_amount,
+        )

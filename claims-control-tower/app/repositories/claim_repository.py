@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from app.database import get_store
 from app.models.claim import Claim, ClaimStatus
@@ -42,6 +42,23 @@ class ClaimRepository:
             if created_at >= threshold:
                 recent_claims.append(claim)
         return recent_claims
+
+    def get_claims_for_customer_last_12_months(
+        self,
+        customer_id: int,
+        incident_date: str,
+        exclude_claim_id: int | None = None,
+    ) -> list[Claim]:
+        reference_date = date.fromisoformat(incident_date)
+        threshold = reference_date - timedelta(days=365)
+        claims: list[Claim] = []
+        for claim in self.get_customer_claims(customer_id):
+            if exclude_claim_id is not None and claim.id == exclude_claim_id:
+                continue
+            claim_incident_date = date.fromisoformat(claim.incident_date)
+            if threshold <= claim_incident_date <= reference_date:
+                claims.append(claim)
+        return claims
 
 
 def _now_iso() -> str:

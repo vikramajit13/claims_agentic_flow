@@ -42,6 +42,8 @@ def resume_workflow(workflow_run_id: int):
         return workflow_service.resume_workflow(workflow_run_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Workflow run not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/workflow-runs/{workflow_run_id}", response_model=WorkflowRunDetail)

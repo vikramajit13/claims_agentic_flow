@@ -12,3 +12,11 @@ class FraudRiskLevel(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
+
+
+class HumanDecision(StrEnum):
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
+    MODIFY_PAYOUT = "MODIFY_PAYOUT"
+    REQUEST_MORE_INFO = "REQUEST_MORE_INFO"
+    ESCALATE = "ESCALATE"
