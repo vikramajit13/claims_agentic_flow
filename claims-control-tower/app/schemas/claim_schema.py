@@ -21,6 +21,7 @@ class ClaimCreateRequest(BaseModel):
     claim_amount: float = Field(..., gt=0)
     incident_date: str
     description: str
+    previous_claim_id: Optional[int] = None
     documents: list[DocumentUpload] = Field(default_factory=list)
 
 

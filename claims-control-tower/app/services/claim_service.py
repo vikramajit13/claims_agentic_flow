@@ -25,6 +25,7 @@ class ClaimService:
             claim_amount=claim_data.claim_amount,
             incident_date=claim_data.incident_date,
             description=claim_data.description,
+            previous_claim_id=claim_data.previous_claim_id,
             status=ClaimStatus.SUBMITTED,
             created_at=now,
             updated_at=now,

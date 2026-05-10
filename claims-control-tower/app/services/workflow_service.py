@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from app.enums import HumanDecision, RecommendationDecision
 from app.models.claim import ClaimStatus
 from app.models.human_task import HumanTaskPriority, HumanTaskType
@@ -15,6 +17,11 @@ from app.schemas.workflow_schema import (
     AdjudicationRecommendation,
     WorkflowExecutionResponse,
     WorkflowRunDetail,
+)
+from app.services.business_guardrails import (
+    BusinessGuardrailService,
+    GuardrailCategory,
+    GuardrailDecision,
 )
 from app.services.adjudication_service import AdjudicationService
 from app.services.audit_service import AuditService
@@ -39,6 +46,11 @@ class WorkflowService:
         self.claims_system = ClaimsSystemAdapter(self.claim_repo)
         self.policy_adapter = PolicyAdminAdapter()
         self.document_service = DocumentValidationService()
+        self.business_guardrails = BusinessGuardrailService(
+            claim_repository=self.claim_repo,
+            policy_repository=self.policy_adapter.policy_repo,
+            claim_service=self.claim_service,
+        )
         self.fraud_service = FraudRiskService()
         self.adjudication_service = AdjudicationService()
         self.human_task_service = HumanTaskService(self.human_task_repo)
@@ -128,17 +140,56 @@ class WorkflowService:
                 risk_result.dict(),
             )
 
-            claim_documents = self.claim_service.get_claim_documents(claim.id)
-            prior_12_month_claims = self.claims_system.get_claims_for_customer_last_12_months(
-                claim.customer_id,
-                claim.incident_date,
-                exclude_claim_id=claim.id,
+            pre_adjudication_summary = self.business_guardrails.evaluate_pre_adjudication(claim.id)
+            self.audit.record_event(
+                workflow_run,
+                WorkflowEventType.BUSINESS_GUARDRAILS_EVALUATED,
+                "PRE_ADJUDICATION_GUARDRAILS",
+                {
+                    "overall_decision": pre_adjudication_summary.overall_decision.value,
+                    "results": [result.dict() for result in pre_adjudication_summary.results],
+                },
             )
-            risk_signal_result = self.risk_signal_service.evaluate(
-                claim,
-                claim_documents,
-                len(prior_12_month_claims),
-            )
+
+            if pre_adjudication_summary.overall_decision == GuardrailDecision.BLOCK:
+                reasons = [result.message for result in pre_adjudication_summary.blocking_results]
+                recommendation = self.adjudication_service.reject(claim, reasons)
+                self.claims_system.update_claim_status(claim.id, ClaimStatus.REJECTED)
+                workflow_run = self.workflow_repo.complete(workflow_run.id)
+                self.audit.record_event(
+                    workflow_run,
+                    WorkflowEventType.WORKFLOW_COMPLETED,
+                    WorkflowRunStep.COMPLETED.value,
+                    {"outcome": "guardrail_blocked", "reasons": reasons},
+                )
+                return WorkflowExecutionResponse(
+                    workflow_run=workflow_run,
+                    recommendation=recommendation,
+                    claim_status=ClaimStatus.REJECTED.value,
+                    final_decision=RecommendationDecision.REJECT.value,
+                    final_approved_amount=0.0,
+                )
+
+            if pre_adjudication_summary.overall_decision == GuardrailDecision.REVIEW_REQUIRED:
+                review_results = pre_adjudication_summary.review_results
+                reason = self._guardrail_review_reason(review_results)
+                recommendation = AdjudicationRecommendation(
+                    recommendation=RecommendationDecision.REFER_TO_HUMAN,
+                    reason=reason,
+                    recommended_amount=claim.claim_amount,
+                    requires_human_review=True,
+                    risk_factors=[result.message for result in review_results],
+                    recommended_action="BUSINESS_GUARDRAIL_REVIEW_REQUIRED",
+                )
+                task_type = self._task_type_for_guardrail_results(review_results)
+                return self._pause_for_human_review(
+                    workflow_run=workflow_run,
+                    claim_id=claim.id,
+                    task_type=task_type,
+                    reason=recommendation.reason,
+                    risk_factors=recommendation.risk_factors,
+                    recommendation=recommendation,
+                )
 
             workflow_run = self.workflow_repo.update_step(workflow_run.id, WorkflowRunStep.ADJUDICATION)
             recommendation = self.adjudication_service.recommend(
@@ -153,30 +204,6 @@ class WorkflowService:
                 WorkflowRunStep.ADJUDICATION.value,
                 recommendation.dict(),
             )
-
-            if risk_signal_result.requires_human_review:
-                recommendation = AdjudicationRecommendation(
-                    recommendation=RecommendationDecision.REFER_TO_HUMAN,
-                    reason=risk_signal_result.reason,
-                    recommended_amount=claim.claim_amount,
-                    requires_human_review=True,
-                    risk_factors=risk_signal_result.risk_factors,
-                    recommended_action=risk_signal_result.recommended_action,
-                )
-                self.audit.record_event(
-                    workflow_run,
-                    WorkflowEventType.RECOMMENDATION_CREATED,
-                    WorkflowRunStep.ADJUDICATION.value,
-                    recommendation.dict(),
-                )
-                return self._pause_for_human_review(
-                    workflow_run=workflow_run,
-                    claim_id=claim.id,
-                    task_type=HumanTaskType.PAYMENT_REVIEW,
-                    reason=recommendation.reason,
-                    risk_factors=recommendation.risk_factors,
-                    recommendation=recommendation,
-                )
 
             if recommendation.recommendation == RecommendationDecision.REQUEST_MORE_INFO:
                 self.claims_system.update_claim_status(claim.id, ClaimStatus.PENDING_MORE_INFO)
@@ -203,7 +230,13 @@ class WorkflowService:
                 )
 
             self.claims_system.update_claim_status(claim.id, ClaimStatus.APPROVED)
-            return self._continue_to_payment(workflow_run.id, recommendation, has_human_approval=False)
+            is_high_risk = risk_result.risk_level.value == "HIGH"
+            return self._continue_to_payment(
+                workflow_run.id,
+                recommendation,
+                has_human_approval=False,
+                is_high_risk=is_high_risk,
+            )
 
         except KeyError as exc:
             workflow_run = self.workflow_repo.fail(workflow_run.id, str(exc))
@@ -339,13 +372,20 @@ class WorkflowService:
             recommended_action="HUMAN_APPROVED",
         )
         self.claims_system.update_claim_status(claim.id, ClaimStatus.APPROVED)
-        return self._continue_to_payment(workflow_run.id, recommendation, has_human_approval=True)
+        is_high_risk = task.task_type in {HumanTaskType.FRAUD_REVIEW, HumanTaskType.PAYMENT_REVIEW}
+        return self._continue_to_payment(
+            workflow_run.id,
+            recommendation,
+            has_human_approval=True,
+            is_high_risk=is_high_risk,
+        )
 
     def _continue_to_payment(
         self,
         workflow_run_id: int,
         recommendation: AdjudicationRecommendation,
         has_human_approval: bool,
+        is_high_risk: bool,
     ) -> WorkflowExecutionResponse:
         workflow_run = self.workflow_repo.get(workflow_run_id)
         claim = self.claim_repo.get(workflow_run.claim_id)
@@ -359,20 +399,48 @@ class WorkflowService:
             recommendation,
             has_human_approval=has_human_approval,
         )
+        pre_payment_summary = self.business_guardrails.evaluate_pre_payment(
+            claim_id=claim.id,
+            approved_amount=Decimal(str(recommendation.recommended_amount)),
+            final_payout_amount=Decimal(str(recommendation.recommended_amount)),
+            human_approval_present=has_human_approval,
+            is_high_risk=is_high_risk,
+        )
+        self.audit.record_event(
+            workflow_run,
+            WorkflowEventType.BUSINESS_GUARDRAILS_EVALUATED,
+            "PRE_PAYMENT_GUARDRAILS",
+            {
+                "overall_decision": pre_payment_summary.overall_decision.value,
+                "results": [result.dict() for result in pre_payment_summary.results],
+            },
+        )
         self.audit.record_step_completed(
             workflow_run,
             WorkflowRunStep.PAYMENT_GUARDRAIL.value,
-            guardrail_result.dict(),
+            {
+                "payment_guardrails": guardrail_result.dict(),
+                "business_guardrails": pre_payment_summary.dict(),
+            },
         )
 
-        if not guardrail_result.passed:
-            if not has_human_approval:
+        block_results = pre_payment_summary.blocking_results
+        review_results = pre_payment_summary.review_results
+        if (
+            not guardrail_result.passed
+            or block_results
+            or (review_results and not has_human_approval)
+        ):
+            reasons = list(guardrail_result.reasons)
+            reasons.extend(result.message for result in block_results + review_results)
+
+            if review_results and not has_human_approval:
                 recommendation = AdjudicationRecommendation(
                     recommendation=RecommendationDecision.REFER_TO_HUMAN,
                     reason="Payment review required",
                     recommended_amount=recommendation.recommended_amount,
                     requires_human_review=True,
-                    risk_factors=guardrail_result.reasons,
+                    risk_factors=reasons,
                     recommended_action="PAYMENT_REVIEW_REQUIRED",
                 )
                 return self._pause_for_human_review(
@@ -380,7 +448,25 @@ class WorkflowService:
                     claim_id=claim.id,
                     task_type=HumanTaskType.PAYMENT_REVIEW,
                     reason="Payment review required",
-                    risk_factors=guardrail_result.reasons,
+                    risk_factors=reasons,
+                    recommendation=recommendation,
+                )
+
+            if not has_human_approval:
+                recommendation = AdjudicationRecommendation(
+                    recommendation=RecommendationDecision.REFER_TO_HUMAN,
+                    reason="Payment review required",
+                    recommended_amount=recommendation.recommended_amount,
+                    requires_human_review=True,
+                    risk_factors=reasons,
+                    recommended_action="PAYMENT_REVIEW_REQUIRED",
+                )
+                return self._pause_for_human_review(
+                    workflow_run=workflow_run,
+                    claim_id=claim.id,
+                    task_type=HumanTaskType.PAYMENT_REVIEW,
+                    reason="Payment review required",
+                    risk_factors=reasons,
                     recommendation=recommendation,
                 )
             self.claims_system.update_claim_status(claim.id, ClaimStatus.PAYMENT_BLOCKED)
@@ -389,7 +475,7 @@ class WorkflowService:
                 workflow_run,
                 WorkflowEventType.PAYMENT_GUARDRAIL_FAILED,
                 WorkflowRunStep.PAYMENT_GUARDRAIL.value,
-                guardrail_result.dict(),
+                {"reasons": reasons},
             )
             self.audit.record_event(
                 workflow_run,
@@ -405,12 +491,15 @@ class WorkflowService:
                 final_approved_amount=recommendation.recommended_amount,
             )
 
-        self.audit.record_event(
-            workflow_run,
-            WorkflowEventType.PAYMENT_GUARDRAIL_PASSED,
-            WorkflowRunStep.PAYMENT_GUARDRAIL.value,
-            guardrail_result.dict(),
-        )
+            self.audit.record_event(
+                workflow_run,
+                WorkflowEventType.PAYMENT_GUARDRAIL_PASSED,
+                WorkflowRunStep.PAYMENT_GUARDRAIL.value,
+                {
+                    "payment_guardrails": guardrail_result.dict(),
+                    "business_guardrails": pre_payment_summary.dict(),
+                },
+            )
 
         workflow_run = self.workflow_repo.update_step(workflow_run.id, WorkflowRunStep.PAYMENT_INSTRUCTION)
         self.audit.record_step_started(workflow_run, WorkflowRunStep.PAYMENT_INSTRUCTION.value)
@@ -469,6 +558,22 @@ class WorkflowService:
 
     def get_payment_instruction(self, payment_instruction_id: int) -> PaymentInstructionResponse:
         return PaymentInstructionResponse(payment_instruction=self.payment_repo.get(payment_instruction_id))
+
+    def _task_type_for_guardrail_results(self, results) -> HumanTaskType:
+        codes = {result.code for result in results}
+        if {"INVOICE_DATE_BEFORE_INCIDENT", "REPEAT_CLAIMS_REVIEW_REQUIRED"}.issubset(codes):
+            return HumanTaskType.PAYMENT_REVIEW
+        if any(result.category == GuardrailCategory.PAYMENT for result in results):
+            return HumanTaskType.PAYMENT_REVIEW
+        if any(result.category == GuardrailCategory.FRAUD_RISK for result in results):
+            return HumanTaskType.FRAUD_REVIEW
+        return HumanTaskType.CLAIM_REVIEW
+
+    def _guardrail_review_reason(self, results) -> str:
+        codes = {result.code for result in results}
+        if {"INVOICE_DATE_BEFORE_INCIDENT", "REPEAT_CLAIMS_REVIEW_REQUIRED"}.issubset(codes):
+            return "Auto-payment blocked due to invoice anomaly and high claim frequency"
+        return "; ".join(result.message for result in results)
 
     def _pause_for_human_review(
         self,

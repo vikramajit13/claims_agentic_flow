@@ -10,6 +10,7 @@ class WorkflowEventType(str, Enum):
     WORKFLOW_RESUMED = "workflow_resumed"
     WORKFLOW_WAITING_FOR_HUMAN = "workflow_waiting_for_human"
     WORKFLOW_WAITING_FOR_INFO = "workflow_waiting_for_info"
+    BUSINESS_GUARDRAILS_EVALUATED = "business_guardrails_evaluated"
     STEP_STARTED = "step_started"
     STEP_COMPLETED = "step_completed"
     STEP_FAILED = "step_failed"

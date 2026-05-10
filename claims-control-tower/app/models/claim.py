@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -24,6 +25,7 @@ class Claim(BaseModel):
     claim_amount: float = Field(..., description="Amount claimed")
     incident_date: str = Field(..., description="Date of the incident (YYYY-MM-DD)")
     description: str = Field(..., description="Description of the incident")
+    previous_claim_id: Optional[int] = Field(default=None, description="Linked prior claim identifier")
     status: ClaimStatus = Field(default=ClaimStatus.SUBMITTED, description="Current status")
     created_at: str = Field(..., description="Timestamp when the claim was created")
     updated_at: str = Field(..., description="Timestamp when the claim was last updated")

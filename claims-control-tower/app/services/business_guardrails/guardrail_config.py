@@ -1,0 +1,9 @@
+from decimal import Decimal
+
+
+class GuardrailConfig:
+    EARLY_CLAIM_DAYS = 15
+    LARGE_CLAIM_AMOUNT_THRESHOLD = Decimal("5000")
+    PAYOUT_NEAR_THRESHOLD_PERCENTAGE = Decimal("0.90")
+    REPEAT_CLAIMS_MONTHS = 12
+    REPEAT_CLAIMS_THRESHOLD = 3
