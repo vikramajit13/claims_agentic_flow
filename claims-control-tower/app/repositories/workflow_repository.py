@@ -21,6 +21,8 @@ class WorkflowRepository:
             started_at=now,
             created_at=now,
             updated_at=now,
+            completed_at=None,
+            last_error=None,
         )
         self.store.workflow_runs[workflow_run.id] = workflow_run
         return workflow_run
@@ -44,7 +46,7 @@ class WorkflowRepository:
 
     def update_step(self, workflow_run_id: int, step: WorkflowRunStep) -> WorkflowRun:
         workflow_run = self.get(workflow_run_id)
-        updated = workflow_run.copy(update={"current_step": step, "updated_at": _now_iso()})
+        updated = workflow_run.model_copy(update={"current_step": step, "updated_at": _now_iso()})
         return self.update(updated)
 
     def mark_waiting_for_human(self, workflow_run_id: int) -> WorkflowRun:

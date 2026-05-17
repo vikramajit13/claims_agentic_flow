@@ -7,3 +7,6 @@ psycopg2-binary
 python-multipart
 httpx
 pytest
+langgraph
+langchain
+langchain-openai

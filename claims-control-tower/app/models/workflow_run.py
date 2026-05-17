@@ -28,7 +28,7 @@ class WorkflowRunStep(str, Enum):
 
 
 class WorkflowRun(BaseModel):
-    id: Optional[int] = Field(None, description="Unique identifier for the workflow run")
+    id: int = Field(..., description="Unique identifier for the workflow run")
     claim_id: int = Field(..., description="ID of the claim associated with this workflow run")
     workflow_name: str = Field(..., description="Name of the workflow being executed")
     status: WorkflowRunStatus = Field(..., description="Current status of the workflow run")

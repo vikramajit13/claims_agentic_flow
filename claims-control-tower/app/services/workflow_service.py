@@ -34,6 +34,7 @@ from app.services.payment_adapter import PaymentAdapter
 from app.services.payment_guardrail_service import PaymentGuardrailService
 from app.services.policy_admin_adapter import PolicyAdminAdapter
 from app.services.risk_signal_service import RiskSignalService
+from app.services.case_packet import CasePacketBuilder
 
 
 class WorkflowService:
@@ -58,6 +59,7 @@ class WorkflowService:
         self.payment_adapter = PaymentAdapter(self.payment_repo)
         self.risk_signal_service = RiskSignalService()
         self.audit = AuditService()
+        self.case_packet_builder = CasePacketBuilder()
 
     def start_claim_workflow(self, claim_id: int) -> WorkflowExecutionResponse:
         workflow_run = self.workflow_repo.create(claim_id)
@@ -198,6 +200,19 @@ class WorkflowService:
                 evidence_result=evidence_result,
                 risk_result=risk_result,
             )
+            
+            case_packet = self.case_packet_builder.build(
+                claim=claim,
+                policy=policy,
+                coverage_result=coverage_result,
+                evidence_result=evidence_result,
+                risk_result=risk_result,
+                guardrail_results=None,
+                recommendation=recommendation,
+            )
+            
+            adjuster_briefing = self.adjuster_briefing_agent.generate(case_packet)
+            
             self.audit.record_event(
                 workflow_run,
                 WorkflowEventType.RECOMMENDATION_CREATED,
