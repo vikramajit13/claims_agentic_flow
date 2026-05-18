@@ -22,6 +22,7 @@ class HumanTaskRepository:
         risk_factors: list[str],
         recommended_decision: str | None,
         recommended_payout_amount: float | None,
+        adjuster_briefing: dict | None = None,
     ) -> HumanTask:
         now = _now_iso()
         task = HumanTask(
@@ -36,6 +37,7 @@ class HumanTaskRepository:
             risk_factors=risk_factors,
             recommended_decision=recommended_decision,
             recommended_payout_amount=recommended_payout_amount,
+            adjuster_briefing=adjuster_briefing,
             created_at=now,
             updated_at=now,
         )

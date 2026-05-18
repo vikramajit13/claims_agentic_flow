@@ -8,6 +8,7 @@ class CasePacketBuilder:
         self,
         claim,
         policy,
+        documents,
         coverage_result,
         evidence_result,
         risk_result,
@@ -32,6 +33,15 @@ class CasePacketBuilder:
                 active_to=policy.active_to,
                 coverage_limit=policy.coverage_limit,
             ),
+            documents=[
+                {
+                    "document_type": document.document_type.value,
+                    "file_name": document.file_name,
+                    "document_metadata": document.document_metadata,
+                    "verification_status": document.verification_status.value,
+                }
+                for document in documents
+            ],
             coverage_result=coverage_result,
             evidence_result=evidence_result,
             risk_result=risk_result,

@@ -38,6 +38,7 @@ class HumanTask(BaseModel):
     risk_factors: list[str] = Field(default_factory=list, description="Risk factors requiring review")
     recommended_decision: Optional[str] = Field(None, description="System recommended decision")
     recommended_payout_amount: Optional[float] = Field(None, description="System recommended payout")
+    adjuster_briefing: dict | None = Field(default=None, description="Structured adjuster briefing payload")
     reviewer_decision: Optional[HumanDecision] = Field(None, description="Decision made by reviewer")
     reviewer_notes: Optional[str] = Field(None, description="Additional reviewer notes")
     reviewer_modified_payout_amount: Optional[float] = Field(None, description="Modified payout amount from reviewer")

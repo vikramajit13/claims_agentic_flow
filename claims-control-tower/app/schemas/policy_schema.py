@@ -1,14 +1,9 @@
-from datetime import date
-from decimal import Decimal
-from typing import Any, Optional
-from uuid import UUID
-
 from pydantic import BaseModel
 
 class PolicySummarySchema(BaseModel):
-    policy_id: UUID
+    policy_id: int
     policy_number: str
     status: str
-    active_from: date
-    active_to: date
-    coverage_limit: Decimal
+    active_from: str
+    active_to: str
+    coverage_limit: float

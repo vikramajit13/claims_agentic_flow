@@ -23,6 +23,7 @@ class WorkflowEventType(str, Enum):
     PAYMENT_GUARDRAIL_PASSED = "payment_guardrail_passed"
     PAYMENT_GUARDRAIL_FAILED = "payment_guardrail_failed"
     PAYMENT_INSTRUCTION_CREATED = "payment_instruction_created"
+    ADJUSTER_BRIEFING_CREATED = "adjuster_briefing_created"
     WORKFLOW_COMPLETED = "workflow_completed"
 
 
@@ -40,6 +41,7 @@ class WorkflowEvent(BaseModel):
     event_type: WorkflowEventType = Field(..., description="Type of the workflow event")
     step_name: str = Field(..., description="Name of the workflow step")
     actor_type: ActorType = Field(default=ActorType.SYSTEM, description="Type of actor triggering the event")
+    adjuster_briefing: dict | None = Field(default=None, description="Briefing for the adjuster, if applicable")
     actor_id: str = Field(..., description="Identifier for the actor")
     event_payload: dict = Field(..., description="Additional data related to the event")
     created_at: str = Field(..., description="Timestamp when the event was created")

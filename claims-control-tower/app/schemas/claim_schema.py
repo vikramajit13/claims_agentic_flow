@@ -1,11 +1,10 @@
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
+
 from app.models.claim import Claim, ClaimStatus
 from app.models.claim_document import ClaimDocument, DocumentType
-from datetime import date
-from decimal import Decimal
-from typing import Any, Optional
-from uuid import UUID
 
 
 class DocumentUpload(BaseModel):
@@ -37,9 +36,9 @@ class ClaimStatusUpdate(BaseModel):
     reason: Optional[str] = None
     
 class ClaimSummarySchema(BaseModel):
-    claim_id: UUID
+    claim_id: int
     claim_type: str
-    claim_amount: Decimal
-    incident_date: date
+    claim_amount: float
+    incident_date: str
     description: Optional[str] = None
-    customer_id: str
+    customer_id: int

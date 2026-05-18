@@ -53,3 +53,4 @@ class HumanTaskDetailResponse(BaseModel):
     risk_factors: list[str] = Field(default_factory=list)
     documents: list[ClaimDocument] = Field(default_factory=list)
     recommendation: HumanTaskRecommendationView
+    adjuster_briefing: dict | None = None

@@ -2,6 +2,7 @@ from app.database import get_store
 from app.models.claim import ClaimStatus
 from app.models.claim_document import DocumentType
 from app.models.workflow_run import WorkflowRunStatus
+from app.services.business_guardrails.guardrail_config import GuardrailConfig
 from app.schemas.claim_schema import ClaimCreateRequest, DocumentUpload
 from app.schemas.human_task_schema import HumanTaskDecisionRequest
 from app.services.claim_service import ClaimService
@@ -214,3 +215,55 @@ def test_phase_2_modify_payout_resumes_and_creates_final_payment_instruction():
         claim_service.get_claim_documents(created.claim.id),
     )
     assert detail.documents[0].document_metadata["invoice_date"] == "2026-04-20"
+
+
+def test_adjuster_briefing_agent_output_is_stored_on_event_and_human_task():
+    claim_service = ClaimService()
+    original_threshold = GuardrailConfig.LARGE_CLAIM_AMOUNT_THRESHOLD
+    GuardrailConfig.LARGE_CLAIM_AMOUNT_THRESHOLD = 10000
+    try:
+        workflow_service = WorkflowService()
+        task_service = HumanTaskService()
+
+        created = claim_service.submit_claim(
+            ClaimCreateRequest(
+                claim_number="AI-AGENT-001",
+                customer_id=100,
+                policy_id=1,
+                claim_type="motor",
+                claim_amount=9000,
+                incident_date="2026-03-15",
+                description="Clean file but high amount should require adjuster review at adjudication",
+                documents=[
+                    DocumentUpload(
+                        document_type=DocumentType.PHOTO,
+                        file_name="photo.jpg",
+                        storage_url="s3://claims/photo.jpg",
+                    ),
+                    DocumentUpload(
+                        document_type=DocumentType.REPAIR_ESTIMATE,
+                        file_name="estimate.pdf",
+                        storage_url="s3://claims/estimate.pdf",
+                    ),
+                ],
+            )
+        )
+        result = workflow_service.start_claim_workflow(created.claim.id)
+
+        assert result.workflow_run.status == WorkflowRunStatus.WAITING_FOR_HUMAN
+        assert result.human_task_id is not None
+
+        task = task_service.get_task(result.human_task_id)
+        assert task.adjuster_briefing is not None
+        assert "briefing_summary" in task.adjuster_briefing
+        assert task.adjuster_briefing["why_workflow_paused"]
+
+        workflow_events = workflow_service.get_workflow_run_events(result.workflow_run.id)
+        briefing_events = [
+            event for event in workflow_events if event.event_type.value == "adjuster_briefing_created"
+        ]
+        assert len(briefing_events) == 1
+        assert briefing_events[0].adjuster_briefing is not None
+        assert briefing_events[0].adjuster_briefing["briefing_summary"] == task.adjuster_briefing["briefing_summary"]
+    finally:
+        GuardrailConfig.LARGE_CLAIM_AMOUNT_THRESHOLD = original_threshold

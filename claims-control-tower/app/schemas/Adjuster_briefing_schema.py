@@ -1,4 +1,3 @@
-from enum import Enum
 from typing import List
 from pydantic import BaseModel, Field
 
@@ -13,7 +12,7 @@ class DecisionOption(BaseModel):
     decision: RecommendationDecision = Field(..., description="The proposed decision action.")
     when_to_use: str = Field(..., description="Criteria for selecting this decision.")
 
-class ClaimReviewSchema(BaseModel):
+class AdjusterBriefingSchema(BaseModel):
     briefing_summary: str = Field(..., description="High-level summary of why the claim requires review.")
     why_workflow_paused: List[str] = Field(..., description="List of reasons triggering the workflow pause.")
     key_risk_factors: List[RiskFactor] = Field(..., description="Structured breakdown of specific risk metrics.")
@@ -22,3 +21,6 @@ class ClaimReviewSchema(BaseModel):
     questions_for_customer_or_repairer: List[str] = Field(..., description="Specific questions to resolve the discrepancies.")
     decision_options: List[DecisionOption] = Field(..., description="Available final decision paths and their logic.")
     customer_safe_message: str = Field(..., description="External-facing message suitable to share with the customer.")
+
+
+AdjusterReviewSchema = AdjusterBriefingSchema

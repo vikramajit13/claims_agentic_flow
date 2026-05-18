@@ -1,23 +1,39 @@
-from typing import Annotated
-from typing_extensions import TypedDict
+import json
+import logging
+from typing import Any
+from urllib import error, request
 
-from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
 
-# 1. Define the Shared Graph State
-class State(TypedDict):
-    # add_messages appends new LLM responses to the conversation history
-    messages: Annotated[list, add_messages]
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-# 2. Initialize the LLM Client
-# Ensure your OPENAI_API_KEY environment variable is set
-llm_client = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
 
-# 3. Define the Node Function to Invoke the LLM
-def invoke_llm_node(state: State):
-    # Pass the current message history to the LLM client
-    response = llm_client.invoke(state["messages"])
-    
-    # Return the new message to update the state
-    return {"messages": [response]}
+class OllamaAsyncService:
+    def __init__(self, base_url: str = "http://localhost:11434", default_model: str = "llama3.1:8b"):
+        self.base_url = f"{base_url.rstrip('/')}/api/generate"
+        self.default_model = default_model
+        self.timeout_seconds = 30
+
+    def generate_structured(self, prompt: str, fallback: dict[str, Any], model: str | None = None) -> dict[str, Any]:
+        payload = json.dumps(
+            {
+                "model": model or self.default_model,
+                "prompt": prompt,
+                "stream": False,
+            }
+        ).encode("utf-8")
+        req = request.Request(
+            self.base_url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with request.urlopen(req, timeout=self.timeout_seconds) as response:
+                body = json.loads(response.read().decode("utf-8"))
+                raw_response = body.get("response", "").strip()
+                if not raw_response:
+                    return fallback
+                return json.loads(raw_response)
+        except (error.URLError, error.HTTPError, TimeoutError, json.JSONDecodeError, ValueError) as exc:  # pragma: no cover
+            logging.warning("Falling back to local adjuster briefing generation: %s", exc)
+            return fallback

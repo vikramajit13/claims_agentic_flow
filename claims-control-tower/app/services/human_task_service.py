@@ -21,6 +21,7 @@ class HumanTaskService:
         assigned_to: str | None = None,
         created_reason: str | None = None,
         risk_factors: list[str] | None = None,
+        adjuster_briefing: dict | None = None,
     ) -> HumanTask:
         return self.task_repo.create(
             claim_id=claim_id,
@@ -32,6 +33,7 @@ class HumanTaskService:
             risk_factors=risk_factors or recommendation.risk_factors,
             recommended_decision=recommendation.recommendation.value,
             recommended_payout_amount=recommendation.recommended_amount,
+            adjuster_briefing=adjuster_briefing,
         )
 
     def assign_task(self, task_id: int, assigned_to: str) -> HumanTask:
@@ -81,4 +83,5 @@ class HumanTaskService:
                 recommended_payout_amount=task.recommended_payout_amount,
                 reason=task.created_reason,
             ),
+            adjuster_briefing=task.adjuster_briefing,
         )

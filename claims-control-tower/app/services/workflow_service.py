@@ -35,6 +35,7 @@ from app.services.payment_guardrail_service import PaymentGuardrailService
 from app.services.policy_admin_adapter import PolicyAdminAdapter
 from app.services.risk_signal_service import RiskSignalService
 from app.services.case_packet import CasePacketBuilder
+from app.services.adjuster_briefing_service import AdjusterBriefingAgent
 
 
 class WorkflowService:
@@ -60,6 +61,7 @@ class WorkflowService:
         self.risk_signal_service = RiskSignalService()
         self.audit = AuditService()
         self.case_packet_builder = CasePacketBuilder()
+        self.adjuster_briefing_agent = AdjusterBriefingAgent()
 
     def start_claim_workflow(self, claim_id: int) -> WorkflowExecutionResponse:
         workflow_run = self.workflow_repo.create(claim_id)
@@ -200,25 +202,46 @@ class WorkflowService:
                 evidence_result=evidence_result,
                 risk_result=risk_result,
             )
-            
-            case_packet = self.case_packet_builder.build(
-                claim=claim,
-                policy=policy,
-                coverage_result=coverage_result,
-                evidence_result=evidence_result,
-                risk_result=risk_result,
-                guardrail_results=None,
-                recommendation=recommendation,
-            )
-            
-            adjuster_briefing = self.adjuster_briefing_agent.generate(case_packet)
-            
             self.audit.record_event(
                 workflow_run,
                 WorkflowEventType.RECOMMENDATION_CREATED,
                 WorkflowRunStep.ADJUDICATION.value,
                 recommendation.dict(),
             )
+
+            guardrail_results = [result.dict() for result in pre_adjudication_summary.results]
+            claim_history_summary = {
+                "recent_30_day_claim_count": len(recent_claims),
+                "last_12_month_claim_count": len(
+                    self.claims_system.get_claims_for_customer_last_12_months(
+                        claim.customer_id,
+                        claim.incident_date,
+                        exclude_claim_id=claim.id,
+                    )
+                ),
+            }
+            case_packet = self.case_packet_builder.build(
+                claim=claim,
+                policy=policy,
+                documents=self.claim_service.get_claim_documents(claim.id),
+                coverage_result=coverage_result.dict(),
+                evidence_result=evidence_result.dict(),
+                risk_result=risk_result.dict(),
+                guardrail_results=guardrail_results,
+                recommendation=recommendation.dict(),
+                claim_history_summary=claim_history_summary,
+            )
+
+            adjuster_briefing = None
+            if recommendation.requires_human_review:
+                adjuster_briefing = self.adjuster_briefing_agent.generate_briefing(case_packet)
+                self.audit.record_event(
+                    workflow_run,
+                    WorkflowEventType.ADJUSTER_BRIEFING_CREATED,
+                    WorkflowRunStep.ADJUDICATION.value,
+                    {"case_packet": case_packet.dict()},
+                    adjuster_briefing=adjuster_briefing.dict(),
+                )
 
             if recommendation.recommendation == RecommendationDecision.REQUEST_MORE_INFO:
                 self.claims_system.update_claim_status(claim.id, ClaimStatus.PENDING_MORE_INFO)
@@ -242,6 +265,7 @@ class WorkflowService:
                     reason=recommendation.reason,
                     risk_factors=recommendation.risk_factors,
                     recommendation=recommendation,
+                    adjuster_briefing=adjuster_briefing.dict() if adjuster_briefing else None,
                 )
 
             self.claims_system.update_claim_status(claim.id, ClaimStatus.APPROVED)
@@ -598,6 +622,7 @@ class WorkflowService:
         reason: str,
         risk_factors: list[str],
         recommendation: AdjudicationRecommendation,
+        adjuster_briefing: dict | None = None,
     ) -> WorkflowExecutionResponse:
         workflow_run = self.workflow_repo.update_step(workflow_run.id, WorkflowRunStep.HUMAN_REVIEW)
         workflow_run = self.workflow_repo.mark_waiting_for_human(workflow_run.id)
@@ -611,12 +636,14 @@ class WorkflowService:
             assigned_to=None,
             created_reason=reason,
             risk_factors=risk_factors,
+            adjuster_briefing=adjuster_briefing,
         )
         self.audit.record_event(
             workflow_run,
             WorkflowEventType.HUMAN_TASK_CREATED,
             WorkflowRunStep.HUMAN_REVIEW.value,
             task.dict(),
+            adjuster_briefing=adjuster_briefing,
         )
         self.audit.record_event(
             workflow_run,
