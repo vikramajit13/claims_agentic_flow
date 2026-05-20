@@ -36,6 +36,8 @@ from app.services.policy_admin_adapter import PolicyAdminAdapter
 from app.services.risk_signal_service import RiskSignalService
 from app.services.case_packet import CasePacketBuilder
 from app.services.adjuster_briefing_service import AdjusterBriefingAgent
+from app.agent.state import claims_review_graph
+from app.schemas.evidence_analysis_schema import EvidenceAnalysisSchema
 
 
 class WorkflowService:
@@ -208,6 +210,9 @@ class WorkflowService:
                 WorkflowRunStep.ADJUDICATION.value,
                 recommendation.dict(),
             )
+            
+       
+            
 
             guardrail_results = [result.dict() for result in pre_adjudication_summary.results]
             claim_history_summary = {
@@ -232,6 +237,10 @@ class WorkflowService:
                 claim_history_summary=claim_history_summary,
             )
 
+            graph_state = claims_review_graph.invoke({"case_packet": case_packet})
+            evidence_analysis = None
+            if graph_state.get("evidence_analysis"):
+                evidence_analysis = EvidenceAnalysisSchema(**graph_state["evidence_analysis"])
             adjuster_briefing = None
             if recommendation.requires_human_review:
                 adjuster_briefing = self.adjuster_briefing_agent.generate_briefing(case_packet)
@@ -239,7 +248,10 @@ class WorkflowService:
                     workflow_run,
                     WorkflowEventType.ADJUSTER_BRIEFING_CREATED,
                     WorkflowRunStep.ADJUDICATION.value,
-                    {"case_packet": case_packet.dict()},
+                    {
+                        "case_packet": case_packet.dict(),
+                        "evidence_analysis": evidence_analysis.dict() if evidence_analysis else None,
+                    },
                     adjuster_briefing=adjuster_briefing.dict(),
                 )
 

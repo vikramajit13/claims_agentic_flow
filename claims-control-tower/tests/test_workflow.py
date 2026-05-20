@@ -1,12 +1,15 @@
 from app.database import get_store
+from app.agent.state import claims_review_graph
 from app.models.claim import ClaimStatus
 from app.models.claim_document import DocumentType
 from app.models.workflow_run import WorkflowRunStatus
 from app.services.business_guardrails.guardrail_config import GuardrailConfig
 from app.schemas.claim_schema import ClaimCreateRequest, DocumentUpload
 from app.schemas.human_task_schema import HumanTaskDecisionRequest
+from app.services.case_packet import CasePacketBuilder
 from app.services.claim_service import ClaimService
 from app.services.human_task_service import HumanTaskService
+from app.services.policy_admin_adapter import PolicyAdminAdapter
 from app.services.workflow_service import WorkflowService
 
 
@@ -267,3 +270,52 @@ def test_adjuster_briefing_agent_output_is_stored_on_event_and_human_task():
         assert briefing_events[0].adjuster_briefing["briefing_summary"] == task.adjuster_briefing["briefing_summary"]
     finally:
         GuardrailConfig.LARGE_CLAIM_AMOUNT_THRESHOLD = original_threshold
+
+
+def test_claims_review_graph_returns_evidence_analysis():
+    claim_service = ClaimService()
+    policy_adapter = PolicyAdminAdapter()
+    case_packet_builder = CasePacketBuilder()
+
+    created = claim_service.submit_claim(
+        ClaimCreateRequest(
+            claim_number="GRAPH-001",
+            customer_id=100,
+            policy_id=1,
+            claim_type="motor",
+            claim_amount=4200,
+            incident_date="2026-03-05",
+            description="Minor collision with standard evidence attached",
+            documents=[
+                DocumentUpload(
+                    document_type=DocumentType.PHOTO,
+                    file_name="photo.jpg",
+                    storage_url="s3://claims/photo.jpg",
+                ),
+                DocumentUpload(
+                    document_type=DocumentType.REPAIR_ESTIMATE,
+                    file_name="estimate.pdf",
+                    storage_url="s3://claims/estimate.pdf",
+                ),
+            ],
+        )
+    )
+
+    claim = claim_service.get_claim(created.claim.id)
+    policy = policy_adapter.get_policy(claim.policy_id)
+    case_packet = case_packet_builder.build(
+        claim=claim,
+        policy=policy,
+        documents=claim_service.get_claim_documents(claim.id),
+        coverage_result={"is_valid": True, "reasons": []},
+        evidence_result={"is_valid": True, "reasons": [], "missing_documents": []},
+        risk_result={"risk_score": 10, "risk_level": "LOW", "risk_factors": []},
+        guardrail_results=[],
+        recommendation={"recommendation": "APPROVE", "reason": "Claim passed automated checks"},
+        claim_history_summary={"recent_30_day_claim_count": 0, "last_12_month_claim_count": 0},
+    )
+
+    graph_state = claims_review_graph.invoke({"case_packet": case_packet})
+
+    assert graph_state["evidence_analysis"]["evidence_quality"] in {"good", "questionable"}
+    assert "evidence_summary" in graph_state["evidence_analysis"]

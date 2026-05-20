@@ -1,6 +1,7 @@
 import json
 
 from app.schemas.Adjuster_briefing_schema import AdjusterBriefingSchema
+from app.schemas.evidence_analysis_schema import EvidenceAnalysisSchema
 
 
 class PromptService:
@@ -17,6 +18,19 @@ class PromptService:
             "If information is missing, say what needs to be verified.\n"
             "Do not accuse the customer of fraud.\n"
             "Do not reveal internal fraud scoring in the customer-facing message.\n"
+            "Return only JSON matching this schema.\n"
+            f"Schema: {json.dumps(schema_json, ensure_ascii=True)}\n"
+            f"Case packet: {json.dumps(packet, ensure_ascii=True)}"
+        )
+
+    def generate_evidence_analysis_prompt(self, case_packet) -> str:
+        packet = case_packet.dict() if hasattr(case_packet, "dict") else dict(case_packet)
+        schema_json = EvidenceAnalysisSchema.schema()
+        return (
+            "You are an internal insurance evidence review assistant.\n"
+            "Use only the supplied case packet.\n"
+            "Assess evidence quality, evidence concerns, missing information, and recommended evidence checks.\n"
+            "Do not invent facts.\n"
             "Return only JSON matching this schema.\n"
             f"Schema: {json.dumps(schema_json, ensure_ascii=True)}\n"
             f"Case packet: {json.dumps(packet, ensure_ascii=True)}"

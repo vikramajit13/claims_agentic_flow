@@ -1,18 +1,15 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from app.schemas.case_packet_schema import CasePacketSchema
+from app.schemas.evidence_analysis_schema import EvidenceAnalysisSchema
 
-class ClaimsWorkflowState(BaseModel):
-    claim_id: str
-    workflow_run_id: str
-    policy_id: str
-    claim_amount: float
-    incident_date: str
-    documents: list[dict]
-    coverage_result: dict | None
-    evidence_result: dict | None
-    fraud_result: dict | None
-    adjudication_result: dict | None
-    human_review_result: dict | None
-    payment_guardrail_result: dict | None
-    final_status: str
-    audit_events: list[dict]
-    requires_human_review: bool
+    
+class ClaimreviewState(BaseModel):
+    case_packet: CasePacketSchema
+    evidence_analysis: EvidenceAnalysisSchema | None = None
+    #risk_analysis: RiskAnalysisSchema | None = None
+    #adjuster_briefing: AdjusterBriefingSchema | None = None
+    #recommended_next_action: str | None = None
+    errors: list[str] = Field(default_factory=list)
+
+
+ClaimsWorkflowState = ClaimreviewState
