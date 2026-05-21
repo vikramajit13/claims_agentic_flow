@@ -5,7 +5,9 @@ from app.services.AI.llm_client import OllamaAsyncService
 from app.services.AI.prompts.adjuster_briefing_prompt import PromptService
 from app.services.adjuster_briefing_service import AdjusterBriefingAgent
 
+from langsmith import traceable
 
+@traceable
 def generate_briefing_node(state: ClaimreviewState):
     case_packet = state.case_packet
     evidence_analysis = state.evidence_analysis

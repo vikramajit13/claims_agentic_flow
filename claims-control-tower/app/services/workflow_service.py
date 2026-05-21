@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-
+from langsmith import traceable
 from app.enums import HumanDecision, RecommendationDecision
 from app.models.claim import ClaimStatus
 from app.models.human_task import HumanTaskPriority, HumanTaskType
@@ -77,7 +77,8 @@ class WorkflowService:
             {"message": "Workflow run created"},
         )
         return self.execute(workflow_run.id)
-
+    
+    @traceable
     def execute(self, workflow_run_id: int) -> WorkflowExecutionResponse:
         workflow_run = self.workflow_repo.get(workflow_run_id)
         claim = self.claim_repo.get(workflow_run.claim_id)

@@ -10,3 +10,4 @@ pytest
 langgraph
 langchain
 langchain-openai
+langsmith
