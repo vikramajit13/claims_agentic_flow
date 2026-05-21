@@ -24,6 +24,7 @@ def analyse_risk_node(state: ClaimreviewState):
         risk_level=FraudRiskLevel(risk_level),
         risk_summary="Risk analysis fallback generated from workflow context.",
         primary_risk_drivers=risk_factors,
+        key_risk_drivers=risk_factors,
         risk_mitigations=[
             "Validate any missing or contradictory evidence before finalizing the claim.",
             "Confirm the claim timeline against policy and document dates.",

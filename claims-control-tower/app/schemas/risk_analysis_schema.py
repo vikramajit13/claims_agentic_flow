@@ -11,6 +11,10 @@ class RiskAnalysisSchema(BaseModel):
         default_factory=list,
         description="Most material facts driving the current risk assessment.",
     )
+    key_risk_drivers: list[str] = Field(
+        default_factory=list,
+        description="Alias field for the most important risk drivers used by downstream routing.",
+    )
     risk_mitigations: list[str] = Field(
         default_factory=list,
         description="Checks or controls that would reduce uncertainty before decisioning.",

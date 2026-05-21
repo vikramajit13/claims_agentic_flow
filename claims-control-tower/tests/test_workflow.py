@@ -262,9 +262,24 @@ def test_adjuster_briefing_agent_output_is_stored_on_event_and_human_task():
         assert task.adjuster_briefing["why_workflow_paused"]
 
         workflow_events = workflow_service.get_workflow_run_events(result.workflow_run.id)
+        evidence_events = [
+            event for event in workflow_events if event.event_type.value == "ai_evidence_analysis_completed"
+        ]
+        risk_events = [
+            event for event in workflow_events if event.event_type.value == "ai_risk_analysis_completed"
+        ]
+        ai_briefing_events = [
+            event for event in workflow_events if event.event_type.value == "ai_adjuster_briefing_generated"
+        ]
         briefing_events = [
             event for event in workflow_events if event.event_type.value == "adjuster_briefing_created"
         ]
+        assert len(evidence_events) == 1
+        assert evidence_events[0].event_payload["evidence_summary"]
+        assert len(risk_events) == 1
+        assert "risk_summary" in risk_events[0].event_payload
+        assert len(ai_briefing_events) == 1
+        assert ai_briefing_events[0].adjuster_briefing is not None
         assert len(briefing_events) == 1
         assert briefing_events[0].adjuster_briefing is not None
         assert briefing_events[0].adjuster_briefing["briefing_summary"] == task.adjuster_briefing["briefing_summary"]
@@ -326,3 +341,92 @@ def test_claims_review_graph_returns_evidence_risk_and_briefing():
     assert "risk_summary" in graph_state["risk_analysis"]
     assert "briefing_summary" in graph_state["adjuster_briefing"]
     assert graph_state["adjuster_briefing"]["decision_options"]
+    assert graph_state["recommended_next_action"]["next_action"] in {
+        "PROCEED_TO_PAYMENT_GUARDRAILS",
+        "CREATE_HUMAN_REVIEW_TASK",
+        "REQUEST_MORE_INFO",
+        "BLOCK_RECOMMENDED",
+    }
+    assert "reason" in graph_state["recommended_next_action"]
+
+
+def test_claims_review_graph_recommends_human_review_for_high_risk_invoice_anomaly():
+    claim_service = ClaimService()
+    policy_adapter = PolicyAdminAdapter()
+    case_packet_builder = CasePacketBuilder()
+
+    created = claim_service.submit_claim(
+        ClaimCreateRequest(
+            claim_number="GRAPH-ROUTE-001",
+            customer_id=999,
+            policy_id=4,
+            claim_type="motor",
+            claim_amount=4200,
+            incident_date="2026-04-25",
+            description="Rear bumper damage after accident",
+            documents=[
+                DocumentUpload(
+                    document_type=DocumentType.INVOICE,
+                    file_name="repair-invoice.pdf",
+                    storage_url="s3://claims/repair-invoice.pdf",
+                    document_metadata={
+                        "invoice_date": "2026-04-20",
+                        "invoice_amount": 4200,
+                        "vendor_name": "ABC Repairs",
+                    },
+                ),
+                DocumentUpload(
+                    document_type=DocumentType.PHOTO,
+                    file_name="damage-photo.jpg",
+                    storage_url="s3://claims/damage-photo.jpg",
+                ),
+                DocumentUpload(
+                    document_type=DocumentType.REPAIR_ESTIMATE,
+                    file_name="repair-estimate.pdf",
+                    storage_url="s3://claims/repair-estimate.pdf",
+                ),
+            ],
+        )
+    )
+
+    claim = claim_service.get_claim(created.claim.id)
+    policy = policy_adapter.get_policy(claim.policy_id)
+    case_packet = case_packet_builder.build(
+        claim=claim,
+        policy=policy,
+        documents=claim_service.get_claim_documents(claim.id),
+        coverage_result={"is_valid": True, "reasons": []},
+        evidence_result={"is_valid": True, "reasons": [], "missing_documents": []},
+        risk_result={
+            "risk_score": 72,
+            "risk_level": "HIGH",
+            "risk_factors": [
+                "Invoice date predates incident date",
+                "Customer has 3 prior claims in 12 months",
+            ],
+        },
+        guardrail_results=[
+            {
+                "code": "INVOICE_DATE_BEFORE_INCIDENT",
+                "decision": "REVIEW_REQUIRED",
+                "message": "Invoice date predates incident date",
+            },
+            {
+                "code": "REPEAT_CLAIMS_REVIEW_REQUIRED",
+                "decision": "REVIEW_REQUIRED",
+                "message": "Customer has 3 prior claims in 12 months",
+            },
+        ],
+        recommendation={
+            "recommendation": "REFER_TO_HUMAN",
+            "reason": "High risk claim requires manual review",
+        },
+        claim_history_summary={"recent_30_day_claim_count": 0, "last_12_month_claim_count": 3},
+    )
+
+    graph_state = claims_review_graph.invoke({"case_packet": case_packet})
+
+    assert graph_state["recommended_next_action"]["next_action"] == "CREATE_HUMAN_REVIEW_TASK"
+    assert graph_state["recommended_next_action"]["task_type"] == "PAYMENT_REVIEW"
+    assert graph_state["recommended_next_action"]["priority"] == "HIGH"
+    assert graph_state["recommended_next_action"]["requires_human_review"] is True

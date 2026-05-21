@@ -39,6 +39,7 @@ from app.services.adjuster_briefing_service import AdjusterBriefingAgent
 from app.agent.state import claims_review_graph
 from app.schemas.evidence_analysis_schema import EvidenceAnalysisSchema
 from app.schemas.Adjuster_briefing_schema import AdjusterBriefingSchema
+from app.schemas.next_action_recommendation_schema import NextActionRecommendation
 from app.schemas.risk_analysis_schema import RiskAnalysisSchema
 
 
@@ -243,6 +244,7 @@ class WorkflowService:
             evidence_analysis = None
             risk_analysis = None
             adjuster_briefing = None
+            recommended_next_action = None
             if graph_state.get("evidence_analysis"):
                 evidence_analysis = EvidenceAnalysisSchema(**graph_state["evidence_analysis"])
                 self.audit.record_event(
@@ -272,6 +274,8 @@ class WorkflowService:
                     },
                     adjuster_briefing=adjuster_briefing.dict(),
                 )
+            if graph_state.get("recommended_next_action"):
+                recommended_next_action = NextActionRecommendation(**graph_state["recommended_next_action"])
 
             if recommendation.requires_human_review and adjuster_briefing is not None:
                 self.audit.record_event(
@@ -282,6 +286,9 @@ class WorkflowService:
                         "case_packet": case_packet.dict(),
                         "evidence_analysis": evidence_analysis.dict() if evidence_analysis else None,
                         "risk_analysis": risk_analysis.dict() if risk_analysis else None,
+                        "recommended_next_action": (
+                            recommended_next_action.dict() if recommended_next_action else None
+                        ),
                     },
                     adjuster_briefing=adjuster_briefing.dict(),
                 )

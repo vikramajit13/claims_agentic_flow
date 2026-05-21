@@ -2,6 +2,7 @@ import json
 
 from app.schemas.Adjuster_briefing_schema import AdjusterBriefingSchema
 from app.schemas.evidence_analysis_schema import EvidenceAnalysisSchema
+from app.schemas.next_action_recommendation_schema import NextActionRecommendation
 from app.schemas.risk_analysis_schema import RiskAnalysisSchema
 
 
@@ -76,4 +77,25 @@ class PromptService:
             f"Schema: {json.dumps(schema_json, ensure_ascii=True)}\n"
             f"Case packet: {json.dumps(packet, ensure_ascii=True)}\n"
             f"Evidence analysis: {json.dumps(evidence, ensure_ascii=True)}"
+        )
+
+    def generate_next_action_prompt(self, case_packet, evidence_analysis, risk_analysis, adjuster_briefing) -> str:
+        packet = case_packet.dict() if hasattr(case_packet, "dict") else dict(case_packet)
+        evidence = evidence_analysis.dict() if hasattr(evidence_analysis, "dict") else dict(evidence_analysis)
+        risk = risk_analysis.dict() if hasattr(risk_analysis, "dict") else dict(risk_analysis)
+        briefing = adjuster_briefing.dict() if hasattr(adjuster_briefing, "dict") else dict(adjuster_briefing)
+        schema_json = self._schema_json(NextActionRecommendation)
+        return (
+            "You are an internal insurance workflow routing assistant.\n"
+            "Recommend the next workflow action only; do not execute it.\n"
+            "Use only the supplied case packet, evidence analysis, risk analysis, and adjuster briefing.\n"
+            "Choose one next_action from the allowed enum values.\n"
+            "Consider adjudication recommendation, guardrail results, evidence quality, missing information, risk level, and key risk drivers.\n"
+            "Do not invent facts.\n"
+            "Return only JSON matching this schema.\n"
+            f"Schema: {json.dumps(schema_json, ensure_ascii=True)}\n"
+            f"Case packet: {json.dumps(packet, ensure_ascii=True)}\n"
+            f"Evidence analysis: {json.dumps(evidence, ensure_ascii=True)}\n"
+            f"Risk analysis: {json.dumps(risk, ensure_ascii=True)}\n"
+            f"Adjuster briefing: {json.dumps(briefing, ensure_ascii=True)}"
         )

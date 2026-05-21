@@ -2,6 +2,7 @@ from app.models.claims_workflow_state import ClaimreviewState
 from app.nodes.analyse_evidence_node import analyse_evidence_node
 from app.nodes.analyse_risk_node import analyse_risk_node
 from app.nodes.generate_briefing_node import generate_briefing_node
+from app.nodes.route_next_action_node import route_next_action_node
 
 try:
     from langgraph.graph import StateGraph
@@ -13,8 +14,10 @@ except ModuleNotFoundError:  # pragma: no cover
 
 class _FallbackCompiledGraph:
     def invoke(self, state):
-        graph_state = state if isinstance(state, ClaimreviewState) else ClaimreviewState(**state)
-        for node in (analyse_evidence_node, analyse_risk_node, generate_briefing_node):
+        graph_state = (
+            state if isinstance(state, ClaimreviewState) else ClaimreviewState(**state)
+        )
+        for node in (analyse_evidence_node, analyse_risk_node, generate_briefing_node, route_next_action_node):
             updates = node(graph_state)
             graph_state = graph_state.copy(update=updates)
         return graph_state.dict()
@@ -27,10 +30,12 @@ def create_claims_processing_state_graph() -> CompiledStateGraph:
     claims_graph.add_node("evidence_analysis", analyse_evidence_node)
     claims_graph.add_node("risk_analysis", analyse_risk_node)
     claims_graph.add_node("generate_briefing", generate_briefing_node)
+    claims_graph.add_node("route_next_action", route_next_action_node)
     claims_graph.add_edge("evidence_analysis", "risk_analysis")
     claims_graph.add_edge("risk_analysis", "generate_briefing")
+    claims_graph.add_edge("generate_briefing", "route_next_action")
     claims_graph.set_entry_point("evidence_analysis")
-    claims_graph.set_finish_point("generate_briefing")
+    claims_graph.set_finish_point("route_next_action")
     return claims_graph.compile()
 
 
