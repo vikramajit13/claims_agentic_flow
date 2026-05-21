@@ -268,11 +268,13 @@ def test_adjuster_briefing_agent_output_is_stored_on_event_and_human_task():
         assert len(briefing_events) == 1
         assert briefing_events[0].adjuster_briefing is not None
         assert briefing_events[0].adjuster_briefing["briefing_summary"] == task.adjuster_briefing["briefing_summary"]
+        assert briefing_events[0].event_payload["evidence_analysis"] is not None
+        assert briefing_events[0].event_payload["risk_analysis"] is not None
     finally:
         GuardrailConfig.LARGE_CLAIM_AMOUNT_THRESHOLD = original_threshold
 
 
-def test_claims_review_graph_returns_evidence_analysis():
+def test_claims_review_graph_returns_evidence_risk_and_briefing():
     claim_service = ClaimService()
     policy_adapter = PolicyAdminAdapter()
     case_packet_builder = CasePacketBuilder()
@@ -319,3 +321,8 @@ def test_claims_review_graph_returns_evidence_analysis():
 
     assert graph_state["evidence_analysis"]["evidence_quality"] in {"good", "questionable"}
     assert "evidence_summary" in graph_state["evidence_analysis"]
+    assert 0 <= graph_state["risk_analysis"]["risk_score"] <= 100
+    assert graph_state["risk_analysis"]["risk_level"] in {"LOW", "MEDIUM", "HIGH"}
+    assert "risk_summary" in graph_state["risk_analysis"]
+    assert "briefing_summary" in graph_state["adjuster_briefing"]
+    assert graph_state["adjuster_briefing"]["decision_options"]

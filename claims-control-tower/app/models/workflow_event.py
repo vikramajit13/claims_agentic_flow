@@ -23,6 +23,9 @@ class WorkflowEventType(str, Enum):
     PAYMENT_GUARDRAIL_PASSED = "payment_guardrail_passed"
     PAYMENT_GUARDRAIL_FAILED = "payment_guardrail_failed"
     PAYMENT_INSTRUCTION_CREATED = "payment_instruction_created"
+    AI_EVIDENCE_ANALYSIS_COMPLETED = "ai_evidence_analysis_completed"
+    AI_RISK_ANALYSIS_COMPLETED = "ai_risk_analysis_completed"
+    AI_ADJUSTER_BRIEFING_GENERATED = "ai_adjuster_briefing_generated"
     ADJUSTER_BRIEFING_CREATED = "adjuster_briefing_created"
     WORKFLOW_COMPLETED = "workflow_completed"
 

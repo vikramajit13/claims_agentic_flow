@@ -38,6 +38,8 @@ from app.services.case_packet import CasePacketBuilder
 from app.services.adjuster_briefing_service import AdjusterBriefingAgent
 from app.agent.state import claims_review_graph
 from app.schemas.evidence_analysis_schema import EvidenceAnalysisSchema
+from app.schemas.Adjuster_briefing_schema import AdjusterBriefingSchema
+from app.schemas.risk_analysis_schema import RiskAnalysisSchema
 
 
 class WorkflowService:
@@ -239,11 +241,39 @@ class WorkflowService:
 
             graph_state = claims_review_graph.invoke({"case_packet": case_packet})
             evidence_analysis = None
+            risk_analysis = None
+            adjuster_briefing = None
             if graph_state.get("evidence_analysis"):
                 evidence_analysis = EvidenceAnalysisSchema(**graph_state["evidence_analysis"])
-            adjuster_briefing = None
-            if recommendation.requires_human_review:
-                adjuster_briefing = self.adjuster_briefing_agent.generate_briefing(case_packet)
+                self.audit.record_event(
+                    workflow_run,
+                    WorkflowEventType.AI_EVIDENCE_ANALYSIS_COMPLETED,
+                    WorkflowRunStep.ADJUDICATION.value,
+                    evidence_analysis.dict(),
+                )
+            if graph_state.get("risk_analysis"):
+                risk_analysis = RiskAnalysisSchema(**graph_state["risk_analysis"])
+                self.audit.record_event(
+                    workflow_run,
+                    WorkflowEventType.AI_RISK_ANALYSIS_COMPLETED,
+                    WorkflowRunStep.ADJUDICATION.value,
+                    risk_analysis.dict(),
+                )
+            if graph_state.get("adjuster_briefing"):
+                adjuster_briefing = AdjusterBriefingSchema(**graph_state["adjuster_briefing"])
+                self.audit.record_event(
+                    workflow_run,
+                    WorkflowEventType.AI_ADJUSTER_BRIEFING_GENERATED,
+                    WorkflowRunStep.ADJUDICATION.value,
+                    {
+                        "briefing_summary": adjuster_briefing.briefing_summary,
+                        "why_workflow_paused": adjuster_briefing.why_workflow_paused,
+                        "recommended_adjuster_actions": adjuster_briefing.recommended_adjuster_actions,
+                    },
+                    adjuster_briefing=adjuster_briefing.dict(),
+                )
+
+            if recommendation.requires_human_review and adjuster_briefing is not None:
                 self.audit.record_event(
                     workflow_run,
                     WorkflowEventType.ADJUSTER_BRIEFING_CREATED,
@@ -251,6 +281,7 @@ class WorkflowService:
                     {
                         "case_packet": case_packet.dict(),
                         "evidence_analysis": evidence_analysis.dict() if evidence_analysis else None,
+                        "risk_analysis": risk_analysis.dict() if risk_analysis else None,
                     },
                     adjuster_briefing=adjuster_briefing.dict(),
                 )
