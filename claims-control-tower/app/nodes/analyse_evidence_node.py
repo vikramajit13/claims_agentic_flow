@@ -4,9 +4,9 @@ from app.models.claims_workflow_state import ClaimreviewState
 from app.schemas.evidence_analysis_schema import EvidenceAnalysisSchema
 from app.services.AI.llm_client import OllamaAsyncService
 from app.services.AI.prompts.adjuster_briefing_prompt import PromptService
-from langsmith import traceable
+from app.services.observability import traceable
 
-@traceable
+@traceable(name="analyse_evidence_node", run_type="chain")
 def analyse_evidence_node(state: ClaimreviewState):
     case_packet = state.case_packet
     prompt = PromptService().generate_evidence_analysis_prompt(case_packet)

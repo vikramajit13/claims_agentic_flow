@@ -2,6 +2,7 @@ import json
 import logging
 from typing import Any
 from urllib import error, request
+from app.services.observability import traceable
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -12,7 +13,7 @@ class OllamaAsyncService:
         self.base_url = f"{base_url.rstrip('/')}/api/generate"
         self.default_model = default_model
         self.timeout_seconds = 30
-
+    @traceable(name="ollama_generate_structured", run_type="llm")
     def generate_structured(self, prompt: str, fallback: dict[str, Any], model: str | None = None) -> dict[str, Any]:
         payload = json.dumps(
             {

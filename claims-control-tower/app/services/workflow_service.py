@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from langsmith import traceable
+from app.services.observability import run_claims_review_graph, traceable
 from app.enums import HumanDecision, RecommendationDecision
 from app.models.claim import ClaimStatus
 from app.models.human_task import HumanTaskPriority, HumanTaskType
@@ -78,7 +78,7 @@ class WorkflowService:
         )
         return self.execute(workflow_run.id)
     
-    @traceable
+    @traceable(name="workflow_execute", run_type="chain")
     def execute(self, workflow_run_id: int) -> WorkflowExecutionResponse:
         workflow_run = self.workflow_repo.get(workflow_run_id)
         claim = self.claim_repo.get(workflow_run.claim_id)
@@ -241,7 +241,7 @@ class WorkflowService:
                 claim_history_summary=claim_history_summary,
             )
 
-            graph_state = claims_review_graph.invoke({"case_packet": case_packet})
+            graph_state = run_claims_review_graph(claims_review_graph, case_packet)
             evidence_analysis = None
             risk_analysis = None
             adjuster_briefing = None

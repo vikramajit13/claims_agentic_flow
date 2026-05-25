@@ -4,10 +4,9 @@ from app.schemas.risk_analysis_schema import RiskAnalysisSchema
 from app.services.AI.llm_client import OllamaAsyncService
 from app.services.AI.prompts.adjuster_briefing_prompt import PromptService
 from app.services.adjuster_briefing_service import AdjusterBriefingAgent
+from app.services.observability import traceable
 
-from langsmith import traceable
-
-@traceable
+@traceable(name="generate_briefing_node", run_type="chain")
 def generate_briefing_node(state: ClaimreviewState):
     case_packet = state.case_packet
     evidence_analysis = state.evidence_analysis

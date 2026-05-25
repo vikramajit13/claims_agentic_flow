@@ -6,7 +6,9 @@ from app.api.human_tasks_router import router as human_tasks_router
 from app.api.payments_router import router as payments_router
 from app.api.workflow_router import router as workflow_router
 from app.config import settings
+from app.services.observability import configure_langsmith
 
+configure_langsmith()
 app = FastAPI(title=settings.app_name)
 
 app.include_router(claims_router)

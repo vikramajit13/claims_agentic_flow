@@ -7,10 +7,9 @@ from app.schemas.next_action_recommendation_schema import NextActionRecommendati
 from app.schemas.risk_analysis_schema import RiskAnalysisSchema
 from app.services.AI.llm_client import OllamaAsyncService
 from app.services.AI.prompts.adjuster_briefing_prompt import PromptService
+from app.services.observability import traceable
 
-from langsmith import traceable
-
-@traceable
+@traceable(name="route_next_action_node", run_type="chain")
 def route_next_action_node(state: ClaimreviewState):
     case_packet = state.case_packet
     evidence_analysis = state.evidence_analysis
