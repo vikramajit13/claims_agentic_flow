@@ -22,6 +22,7 @@ def generate_briefing_node(state: ClaimreviewState):
         case_packet,
         evidence_analysis,
         risk_analysis,
+        state.tool_results,
     )
     fallback = AdjusterBriefingAgent()._build_fallback_briefing(case_packet)
     briefing = OllamaAsyncService().generate_structured(prompt, fallback.dict())

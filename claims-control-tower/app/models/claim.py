@@ -27,5 +27,7 @@ class Claim(BaseModel):
     description: str = Field(..., description="Description of the incident")
     previous_claim_id: Optional[int] = Field(default=None, description="Linked prior claim identifier")
     status: ClaimStatus = Field(default=ClaimStatus.SUBMITTED, description="Current status")
+    rejection_reason: Optional[str] = Field(default=None, description="Reason the claim was rejected")
+    approved_reason: Optional[str] = Field(default=None, description="Reason the claim was approved")
     created_at: str = Field(..., description="Timestamp when the claim was created")
     updated_at: str = Field(..., description="Timestamp when the claim was last updated")

@@ -102,7 +102,12 @@ class WorkflowService:
 
             if not coverage_result.is_valid:
                 recommendation = self.adjudication_service.reject(claim, coverage_result.reasons)
-                self.claims_system.update_claim_status(claim.id, ClaimStatus.REJECTED)
+                self.claims_system.update_claim_status(
+                    claim.id,
+                    ClaimStatus.REJECTED,
+                    rejection_reason=recommendation.reason,
+                    approved_reason=None,
+                )
                 workflow_run = self.workflow_repo.complete(workflow_run.id)
                 self.audit.record_event(
                     workflow_run,
@@ -164,7 +169,12 @@ class WorkflowService:
             if pre_adjudication_summary.overall_decision == GuardrailDecision.BLOCK:
                 reasons = [result.message for result in pre_adjudication_summary.blocking_results]
                 recommendation = self.adjudication_service.reject(claim, reasons)
-                self.claims_system.update_claim_status(claim.id, ClaimStatus.REJECTED)
+                self.claims_system.update_claim_status(
+                    claim.id,
+                    ClaimStatus.REJECTED,
+                    rejection_reason=recommendation.reason,
+                    approved_reason=None,
+                )
                 workflow_run = self.workflow_repo.complete(workflow_run.id)
                 self.audit.record_event(
                     workflow_run,
@@ -239,6 +249,7 @@ class WorkflowService:
                 guardrail_results=guardrail_results,
                 recommendation=recommendation.dict(),
                 claim_history_summary=claim_history_summary,
+                workflow_run_id=workflow_run.id,
             )
 
             graph_state = run_claims_review_graph(claims_review_graph, case_packet)
@@ -319,7 +330,12 @@ class WorkflowService:
                     adjuster_briefing=adjuster_briefing.dict() if adjuster_briefing else None,
                 )
 
-            self.claims_system.update_claim_status(claim.id, ClaimStatus.APPROVED)
+            self.claims_system.update_claim_status(
+                claim.id,
+                ClaimStatus.APPROVED,
+                rejection_reason=None,
+                approved_reason=recommendation.reason,
+            )
             is_high_risk = risk_result.risk_level.value == "HIGH"
             return self._continue_to_payment(
                 workflow_run.id,
@@ -387,7 +403,12 @@ class WorkflowService:
         claim = self.claim_repo.get(task.claim_id)
 
         if request.decision == HumanDecision.REJECT:
-            self.claims_system.update_claim_status(claim.id, ClaimStatus.REJECTED)
+            self.claims_system.update_claim_status(
+                claim.id,
+                ClaimStatus.REJECTED,
+                rejection_reason=request.decision_notes or "Rejected by human reviewer",
+                approved_reason=None,
+            )
             workflow_run = self.workflow_repo.complete(workflow_run.id)
             recommendation = AdjudicationRecommendation(
                 recommendation=RecommendationDecision.REJECT,
@@ -461,7 +482,12 @@ class WorkflowService:
             risk_factors=task.risk_factors,
             recommended_action="HUMAN_APPROVED",
         )
-        self.claims_system.update_claim_status(claim.id, ClaimStatus.APPROVED)
+        self.claims_system.update_claim_status(
+            claim.id,
+            ClaimStatus.APPROVED,
+            rejection_reason=None,
+            approved_reason=recommendation.reason,
+        )
         is_high_risk = task.task_type in {HumanTaskType.FRAUD_REVIEW, HumanTaskType.PAYMENT_REVIEW}
         return self._continue_to_payment(
             workflow_run.id,
@@ -559,7 +585,11 @@ class WorkflowService:
                     risk_factors=reasons,
                     recommendation=recommendation,
                 )
-            self.claims_system.update_claim_status(claim.id, ClaimStatus.PAYMENT_BLOCKED)
+            self.claims_system.update_claim_status(
+                claim.id,
+                ClaimStatus.PAYMENT_BLOCKED,
+                approved_reason=claim.approved_reason or recommendation.reason,
+            )
             workflow_run = self.workflow_repo.complete(workflow_run.id)
             self.audit.record_event(
                 workflow_run,
@@ -599,7 +629,11 @@ class WorkflowService:
             amount=recommendation.recommended_amount,
             customer_id=claim.customer_id,
         )
-        self.claims_system.update_claim_status(claim.id, ClaimStatus.PAYMENT_READY)
+        self.claims_system.update_claim_status(
+            claim.id,
+            ClaimStatus.PAYMENT_READY,
+            approved_reason=claim.approved_reason or recommendation.reason,
+        )
         workflow_run = self.workflow_repo.complete(workflow_run.id)
         self.audit.record_step_completed(
             workflow_run,

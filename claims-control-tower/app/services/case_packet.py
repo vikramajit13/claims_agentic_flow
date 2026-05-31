@@ -15,8 +15,10 @@ class CasePacketBuilder:
         guardrail_results,
         recommendation,
         claim_history_summary=None,
+        workflow_run_id=None,
     ) -> CasePacketSchema:
         return CasePacketSchema(
+            workflow_run_id=workflow_run_id,
             claim_summary=ClaimSummarySchema(
                 claim_id=claim.id,
                 customer_id=claim.customer_id,
@@ -24,6 +26,7 @@ class CasePacketBuilder:
                 claim_amount=claim.claim_amount,
                 incident_date=claim.incident_date,
                 description=claim.description,
+                previous_claim_id=claim.previous_claim_id,
             ),
             policy_summary=PolicySummarySchema(
                 policy_id=policy.id,

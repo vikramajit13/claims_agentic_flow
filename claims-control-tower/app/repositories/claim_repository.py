@@ -5,6 +5,8 @@ from datetime import date, datetime, timedelta
 from app.database import get_store
 from app.models.claim import Claim, ClaimStatus
 
+_UNSET = object()
+
 
 class ClaimRepository:
     def __init__(self) -> None:
@@ -17,16 +19,27 @@ class ClaimRepository:
     def get(self, claim_id: int) -> Claim:
         return self.store.claims[claim_id]
 
-    def list(self) -> list[Claim]:
+    def get_list(self) -> list[Claim]:
         return list(self.store.claims.values())
 
     def update(self, claim: Claim) -> Claim:
         self.store.claims[claim.id] = claim
         return claim
 
-    def update_status(self, claim_id: int, status: ClaimStatus) -> Claim:
+    def update_status(
+        self,
+        claim_id: int,
+        status: ClaimStatus,
+        rejection_reason: str | object = _UNSET,
+        approved_reason: str | object = _UNSET,
+    ) -> Claim:
         claim = self.get(claim_id)
-        updated = claim.copy(update={"status": status, "updated_at": _now_iso()})
+        update_payload = {"status": status, "updated_at": _now_iso()}
+        if rejection_reason is not _UNSET:
+            update_payload["rejection_reason"] = rejection_reason
+        if approved_reason is not _UNSET:
+            update_payload["approved_reason"] = approved_reason
+        updated = claim.copy(update=update_payload)
         return self.update(updated)
 
     def get_customer_claims(self, customer_id: int) -> list[Claim]:

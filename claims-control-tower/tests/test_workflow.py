@@ -51,7 +51,10 @@ def test_workflow_auto_approval_creates_payment_instruction():
     assert result.recommendation is not None
     assert result.recommendation.recommendation == "APPROVE"
     assert result.payment_instruction_id is not None
-    assert claim_service.get_claim(created.claim.id).status == ClaimStatus.PAYMENT_READY
+    claim = claim_service.get_claim(created.claim.id)
+    assert claim.status == ClaimStatus.PAYMENT_READY
+    assert claim.approved_reason == result.recommendation.reason
+    assert claim.rejection_reason is None
 
 
 def test_workflow_human_review_resume_creates_payment_instruction():
@@ -93,7 +96,10 @@ def test_workflow_human_review_resume_creates_payment_instruction():
 
     assert resumed_result.workflow_run.status == WorkflowRunStatus.COMPLETED
     assert resumed_result.payment_instruction_id is not None
-    assert claim_service.get_claim(created.claim.id).status == ClaimStatus.PAYMENT_READY
+    claim = claim_service.get_claim(created.claim.id)
+    assert claim.status == ClaimStatus.PAYMENT_READY
+    assert claim.approved_reason == "Approved after manual review"
+    assert claim.rejection_reason is None
 
 
 def test_phase_2_suspicious_claim_pauses_with_payment_review_task():
@@ -330,6 +336,7 @@ def test_claims_review_graph_returns_evidence_risk_and_briefing():
         guardrail_results=[],
         recommendation={"recommendation": "APPROVE", "reason": "Claim passed automated checks"},
         claim_history_summary={"recent_30_day_claim_count": 0, "last_12_month_claim_count": 0},
+        workflow_run_id=999,
     )
 
     graph_state = claims_review_graph.invoke({"case_packet": case_packet})
@@ -422,10 +429,20 @@ def test_claims_review_graph_recommends_human_review_for_high_risk_invoice_anoma
             "reason": "High risk claim requires manual review",
         },
         claim_history_summary={"recent_30_day_claim_count": 0, "last_12_month_claim_count": 3},
+        workflow_run_id=1000,
     )
 
     graph_state = claims_review_graph.invoke({"case_packet": case_packet})
 
+    assert "get_claim_history" in graph_state["tool_results"]
+    assert "get_document_metadata" in graph_state["tool_results"]
+    assert set(graph_state["available_tools"]) == {
+        "get_claim_history",
+        "get_prior_rejection_details",
+        "get_policy_coverage_summary",
+        "get_document_metadata",
+        "get_guardrail_results",
+    }
     assert graph_state["recommended_next_action"]["next_action"] == "CREATE_HUMAN_REVIEW_TASK"
     assert graph_state["recommended_next_action"]["task_type"] == "PAYMENT_REVIEW"
     assert graph_state["recommended_next_action"]["priority"] == "HIGH"

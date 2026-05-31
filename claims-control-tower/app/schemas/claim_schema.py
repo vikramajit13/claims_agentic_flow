@@ -42,3 +42,4 @@ class ClaimSummarySchema(BaseModel):
     incident_date: str
     description: Optional[str] = None
     customer_id: int
+    previous_claim_id: Optional[int] = None

@@ -55,8 +55,19 @@ class ClaimService:
     def list_claims(self) -> list[Claim]:
         return self.claim_repo.list()
 
-    def update_status(self, claim_id: int, status: ClaimStatus) -> Claim:
-        return self.claim_repo.update_status(claim_id, status)
+    def update_status(
+        self,
+        claim_id: int,
+        status: ClaimStatus,
+        rejection_reason: str | None = None,
+        approved_reason: str | None = None,
+    ) -> Claim:
+        return self.claim_repo.update_status(
+            claim_id,
+            status,
+            rejection_reason=rejection_reason,
+            approved_reason=approved_reason,
+        )
 
     def get_claim_documents(self, claim_id: int) -> list[ClaimDocument]:
         return [document for document in self.store.documents.values() if document.claim_id == claim_id]

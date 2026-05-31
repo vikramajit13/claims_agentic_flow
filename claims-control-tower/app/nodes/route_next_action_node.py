@@ -29,6 +29,7 @@ def route_next_action_node(state: ClaimreviewState):
         evidence_analysis,
         risk_analysis,
         adjuster_briefing,
+        state.tool_results,
     )
     fallback = _build_fallback_recommendation(case_packet, evidence_analysis, risk_analysis)
     recommendation = OllamaAsyncService().generate_structured(prompt, fallback.dict())
