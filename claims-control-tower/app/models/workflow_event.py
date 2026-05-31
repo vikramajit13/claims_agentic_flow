@@ -25,6 +25,8 @@ class WorkflowEventType(str, Enum):
     PAYMENT_INSTRUCTION_CREATED = "payment_instruction_created"
     AI_EVIDENCE_ANALYSIS_COMPLETED = "ai_evidence_analysis_completed"
     AI_RISK_ANALYSIS_COMPLETED = "ai_risk_analysis_completed"
+    AI_INFORMATION_GAPS_IDENTIFIED = "ai_information_gaps_identified"
+    AI_TOOL_EXECUTED = "ai_tool_executed"
     AI_ADJUSTER_BRIEFING_GENERATED = "ai_adjuster_briefing_generated"
     ADJUSTER_BRIEFING_CREATED = "adjuster_briefing_created"
     WORKFLOW_COMPLETED = "workflow_completed"

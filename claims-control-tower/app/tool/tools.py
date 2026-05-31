@@ -13,6 +13,7 @@ except ModuleNotFoundError:  # pragma: no cover
         def decorator(fn):
             return _FallbackTool(fn)
         return decorator
+from app.services.observability import traceable
 from app.models.workflow_event import WorkflowEventType
 from app.repositories.claim_repository import ClaimRepository
 from app.repositories.policy_repository import PolicyRepository
@@ -24,6 +25,7 @@ from app.services.claim_service import ClaimService
     name_or_callable="get_claim_history",
     description="Fetch the claim history for a given customer ID, including past claims, outcomes, and any relevant notes.",
 )
+@traceable(name="get_claim_history_tool", run_type="tool")
 def get_claim_history(
     customer_id: int, lookback_days: int, exclude_claim_id: int
 ) -> dict:
@@ -64,6 +66,7 @@ def get_claim_history(
     name_or_callable="get_prior_rejection_details",
     description="Fetch the prior rejection details for a given claim ID.",
 )
+@traceable(name="get_prior_rejection_details_tool", run_type="tool")
 def get_prior_rejection_details(previous_claim_id: int) -> dict:
     """
     Fetch the prior rejection details for a given claim ID.
@@ -103,6 +106,7 @@ def get_prior_rejection_details(previous_claim_id: int) -> dict:
     name_or_callable="get_policy_coverage_summary",
     description="Fetch policy dates, status, limits, deductibles, and covered claim types for policy interpretation and coverage reasoning.",
 )
+@traceable(name="get_policy_coverage_summary_tool", run_type="tool")
 def get_policy_coverage_summary(policy_id: int) -> dict:
     policy_repository = PolicyRepository()
     policy = policy_repository.get(policy_id)
@@ -121,6 +125,7 @@ def get_policy_coverage_summary(policy_id: int) -> dict:
     name_or_callable="get_document_metadata",
     description="Fetch structured claim document metadata for evidence analysis, including invoice fields and verification status.",
 )
+@traceable(name="get_document_metadata_tool", run_type="tool")
 def get_document_metadata(claim_id: int, document_types: list[str] | None = None) -> dict:
     claim_service = ClaimService()
     documents = claim_service.get_claim_documents(claim_id)
@@ -152,6 +157,7 @@ def get_document_metadata(claim_id: int, document_types: list[str] | None = None
     name_or_callable="get_guardrail_results",
     description="Fetch deterministic business guardrail outcomes for a claim from stored workflow events.",
 )
+@traceable(name="get_guardrail_results_tool", run_type="tool")
 def get_guardrail_results(
     claim_id: int,
     workflow_run_id: int,
@@ -199,6 +205,7 @@ SAFE_READ_ONLY_TOOLS = {
 }
 
 
+@traceable(name="invoke_safe_read_tool", run_type="tool")
 def invoke_safe_read_tool(tool_name: str, arguments: dict) -> dict:
     if tool_name not in SAFE_READ_ONLY_TOOLS:
         raise ValueError(f"Tool '{tool_name}' is not in the permitted read-only tool registry.")

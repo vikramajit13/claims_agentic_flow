@@ -38,6 +38,7 @@ from app.services.case_packet import CasePacketBuilder
 from app.services.adjuster_briefing_service import AdjusterBriefingAgent
 from app.agent.state import claims_review_graph
 from app.schemas.evidence_analysis_schema import EvidenceAnalysisSchema
+from app.schemas.investigation_schema import InformationGap, ToolExecutionRecord
 from app.schemas.Adjuster_briefing_schema import AdjusterBriefingSchema
 from app.schemas.next_action_recommendation_schema import NextActionRecommendation
 from app.schemas.risk_analysis_schema import RiskAnalysisSchema
@@ -201,6 +202,34 @@ class WorkflowService:
                     risk_factors=[result.message for result in review_results],
                     recommended_action="BUSINESS_GUARDRAIL_REVIEW_REQUIRED",
                 )
+                guardrail_results = [result.dict() for result in pre_adjudication_summary.results]
+                claim_history_summary = {
+                    "recent_30_day_claim_count": len(recent_claims),
+                    "last_12_month_claim_count": len(
+                        self.claims_system.get_claims_for_customer_last_12_months(
+                            claim.customer_id,
+                            claim.incident_date,
+                            exclude_claim_id=claim.id,
+                        )
+                    ),
+                }
+                case_packet = self.case_packet_builder.build(
+                    claim=claim,
+                    policy=policy,
+                    documents=self.claim_service.get_claim_documents(claim.id),
+                    coverage_result=coverage_result.dict(),
+                    evidence_result=evidence_result.dict(),
+                    risk_result=risk_result.dict(),
+                    guardrail_results=guardrail_results,
+                    recommendation=recommendation.dict(),
+                    claim_history_summary=claim_history_summary,
+                    workflow_run_id=workflow_run.id,
+                )
+                ai_review = self._run_ai_claim_review(
+                    workflow_run=workflow_run,
+                    case_packet=case_packet,
+                    step_name=WorkflowRunStep.HUMAN_REVIEW.value,
+                )
                 task_type = self._task_type_for_guardrail_results(review_results)
                 return self._pause_for_human_review(
                     workflow_run=workflow_run,
@@ -209,6 +238,9 @@ class WorkflowService:
                     reason=recommendation.reason,
                     risk_factors=recommendation.risk_factors,
                     recommendation=recommendation,
+                    adjuster_briefing=(
+                        ai_review["adjuster_briefing"].dict() if ai_review["adjuster_briefing"] else None
+                    ),
                 )
 
             workflow_run = self.workflow_repo.update_step(workflow_run.id, WorkflowRunStep.ADJUDICATION)
@@ -252,42 +284,15 @@ class WorkflowService:
                 workflow_run_id=workflow_run.id,
             )
 
-            graph_state = run_claims_review_graph(claims_review_graph, case_packet)
-            evidence_analysis = None
-            risk_analysis = None
-            adjuster_briefing = None
-            recommended_next_action = None
-            if graph_state.get("evidence_analysis"):
-                evidence_analysis = EvidenceAnalysisSchema(**graph_state["evidence_analysis"])
-                self.audit.record_event(
-                    workflow_run,
-                    WorkflowEventType.AI_EVIDENCE_ANALYSIS_COMPLETED,
-                    WorkflowRunStep.ADJUDICATION.value,
-                    evidence_analysis.dict(),
-                )
-            if graph_state.get("risk_analysis"):
-                risk_analysis = RiskAnalysisSchema(**graph_state["risk_analysis"])
-                self.audit.record_event(
-                    workflow_run,
-                    WorkflowEventType.AI_RISK_ANALYSIS_COMPLETED,
-                    WorkflowRunStep.ADJUDICATION.value,
-                    risk_analysis.dict(),
-                )
-            if graph_state.get("adjuster_briefing"):
-                adjuster_briefing = AdjusterBriefingSchema(**graph_state["adjuster_briefing"])
-                self.audit.record_event(
-                    workflow_run,
-                    WorkflowEventType.AI_ADJUSTER_BRIEFING_GENERATED,
-                    WorkflowRunStep.ADJUDICATION.value,
-                    {
-                        "briefing_summary": adjuster_briefing.briefing_summary,
-                        "why_workflow_paused": adjuster_briefing.why_workflow_paused,
-                        "recommended_adjuster_actions": adjuster_briefing.recommended_adjuster_actions,
-                    },
-                    adjuster_briefing=adjuster_briefing.dict(),
-                )
-            if graph_state.get("recommended_next_action"):
-                recommended_next_action = NextActionRecommendation(**graph_state["recommended_next_action"])
+            ai_review = self._run_ai_claim_review(
+                workflow_run=workflow_run,
+                case_packet=case_packet,
+                step_name=WorkflowRunStep.ADJUDICATION.value,
+            )
+            evidence_analysis = ai_review["evidence_analysis"]
+            risk_analysis = ai_review["risk_analysis"]
+            adjuster_briefing = ai_review["adjuster_briefing"]
+            recommended_next_action = ai_review["recommended_next_action"]
 
             if recommendation.requires_human_review and adjuster_briefing is not None:
                 self.audit.record_event(
@@ -750,3 +755,78 @@ class WorkflowService:
             final_decision=recommendation.recommendation.value,
             final_approved_amount=recommendation.recommended_amount,
         )
+
+    def _run_ai_claim_review(self, workflow_run, case_packet, step_name: str):
+        graph_state = run_claims_review_graph(claims_review_graph, case_packet)
+        evidence_analysis = None
+        risk_analysis = None
+        adjuster_briefing = None
+        recommended_next_action = None
+
+        if graph_state.get("evidence_analysis"):
+            evidence_analysis = EvidenceAnalysisSchema(**graph_state["evidence_analysis"])
+            self.audit.record_event(
+                workflow_run,
+                WorkflowEventType.AI_EVIDENCE_ANALYSIS_COMPLETED,
+                step_name,
+                evidence_analysis.dict(),
+            )
+        if graph_state.get("risk_analysis"):
+            risk_analysis = RiskAnalysisSchema(**graph_state["risk_analysis"])
+            self.audit.record_event(
+                workflow_run,
+                WorkflowEventType.AI_RISK_ANALYSIS_COMPLETED,
+                step_name,
+                risk_analysis.dict(),
+            )
+
+        information_gaps = [
+            gap if isinstance(gap, InformationGap) else InformationGap(**gap)
+            for gap in graph_state.get("information_gaps", [])
+        ]
+        if information_gaps:
+            self.audit.record_event(
+                workflow_run,
+                WorkflowEventType.AI_INFORMATION_GAPS_IDENTIFIED,
+                step_name,
+                {
+                    "investigation_required": graph_state.get("investigation_required", False),
+                    "information_gaps": [gap.dict() for gap in information_gaps],
+                },
+            )
+
+        tool_calls = [
+            call if isinstance(call, ToolExecutionRecord) else ToolExecutionRecord(**call)
+            for call in graph_state.get("previous_tool_calls", [])
+        ]
+        for tool_call in tool_calls:
+            self.audit.record_event(
+                workflow_run,
+                WorkflowEventType.AI_TOOL_EXECUTED,
+                step_name,
+                tool_call.dict(),
+            )
+
+        if graph_state.get("adjuster_briefing"):
+            adjuster_briefing = AdjusterBriefingSchema(**graph_state["adjuster_briefing"])
+            self.audit.record_event(
+                workflow_run,
+                WorkflowEventType.AI_ADJUSTER_BRIEFING_GENERATED,
+                step_name,
+                {
+                    "briefing_summary": adjuster_briefing.briefing_summary,
+                    "why_workflow_paused": adjuster_briefing.why_workflow_paused,
+                    "recommended_adjuster_actions": adjuster_briefing.recommended_adjuster_actions,
+                },
+                adjuster_briefing=adjuster_briefing.dict(),
+            )
+        if graph_state.get("recommended_next_action"):
+            recommended_next_action = NextActionRecommendation(**graph_state["recommended_next_action"])
+
+        return {
+            "graph_state": graph_state,
+            "evidence_analysis": evidence_analysis,
+            "risk_analysis": risk_analysis,
+            "adjuster_briefing": adjuster_briefing,
+            "recommended_next_action": recommended_next_action,
+        }

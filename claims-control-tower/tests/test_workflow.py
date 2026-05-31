@@ -157,6 +157,17 @@ def test_phase_2_suspicious_claim_pauses_with_payment_review_task():
     assert task.created_reason == "Auto-payment blocked due to invoice anomaly and high claim frequency"
     assert task.recommended_payout_amount == 4200
     assert task.status.value == "OPEN"
+    assert task.adjuster_briefing is not None
+
+    workflow_events = workflow_service.get_workflow_run_events(result.workflow_run.id)
+    tool_events = [
+        event for event in workflow_events if event.event_type.value == "ai_tool_executed"
+    ]
+    assert tool_events
+    assert {event.event_payload["tool_name"] for event in tool_events} >= {
+        "get_claim_history",
+        "get_document_metadata",
+    }
 
 
 def test_phase_2_modify_payout_resumes_and_creates_final_payment_instruction():
