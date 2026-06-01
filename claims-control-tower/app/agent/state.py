@@ -1,4 +1,5 @@
 from app.models.claims_workflow_state import ClaimreviewState
+from app.models.risk_agent_state import RiskAgentState
 from app.nodes.agent_decide_tool_node import agent_decide_tool_node
 from app.nodes.analyse_evidence_node import analyse_evidence_node
 from app.nodes.analyse_risk_node import analyse_risk_node
@@ -7,9 +8,10 @@ from app.nodes.generate_briefing_node import generate_briefing_node
 from app.nodes.identify_information_gaps_node import identify_information_gaps_node
 from app.nodes.merge_tool_result_node import merge_tool_result_node
 from app.nodes.route_next_action_node import route_next_action_node
-
+from app.agent.claims_review_graph import create_risk_investigation_node
+from app.agent.risk.risk_agent_graph import risk_agent_graph
 try:
-    from langgraph.graph import StateGraph
+    from langgraph.graph import StateGraph, START , FINISH
     from langgraph.graph.state import CompiledStateGraph
 except ModuleNotFoundError:  # pragma: no cover
     StateGraph = None
@@ -66,7 +68,7 @@ def create_claims_processing_state_graph() -> CompiledStateGraph:
         return _FallbackCompiledGraph()
     claims_graph = StateGraph(ClaimreviewState)
     claims_graph.add_node("evidence_analysis", analyse_evidence_node)
-    claims_graph.add_node("risk_analysis", analyse_risk_node)
+    claims_graph.add_node("risk_analysis", create_risk_investigation_node(risk_agent_graph))
     claims_graph.add_node("identify_information_gaps", identify_information_gaps_node)
     claims_graph.add_node("agent_decide_tool", agent_decide_tool_node)
     claims_graph.add_node("execute_tool", execute_tool_node)
