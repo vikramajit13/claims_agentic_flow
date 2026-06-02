@@ -1,74 +1,103 @@
-# app/agents/risk/risk_agent_nodes.py
+import json
 
-from langchain.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.agent.risk.risk_agent_prompt import RISK_AGENT_SYSTEM_PROMPT
-
-
-
-def format_risk_context(case_packet) -> str:
-    return f"""
-Assess risk for the following insurance claim.
-
-Claim:
-{case_packet.claim_summary.model_dump_json(indent=2)}
-
-Deterministic risk result:
-{case_packet.risk_result.model_dump_json(indent=2)}
-
-Deterministic guardrail results:
-{case_packet.guardrail_results}
-
-Existing claim-history summary:
-{case_packet.claim_history_summary}
-
-Use tools only when additional context is materially required.
-"""
+from app.agent.risk.risk_agent_prompt import (
+    RISK_AGENT_SYSTEM_PROMPT,
+    generate_risk_tool_decision_prompt,
+    generate_final_risk_analysis_prompt,
+)
+from app.schemas.investigation_schema import ToolExecutionRecord
+from app.schemas.risk_analysis_schema import RiskAnalysisSchema
+from app.services.observability import traceable
 
 
+@traceable(name="risk_agent_reason_node", run_type="chain")
 def create_risk_agent_node(model_with_tools):
-
     def risk_agent_node(state):
+        prompt = generate_risk_tool_decision_prompt(
+            state.case_packet,
+            state.tool_results,
+            state.previous_tool_calls,
+            [
+                "get_claim_history",
+                "get_prior_rejection_details",
+                "get_policy_coverage_summary",
+                "get_document_metadata",
+                "get_guardrail_results",
+            ],
+        )
         response = model_with_tools.invoke(
             [
                 SystemMessage(content=RISK_AGENT_SYSTEM_PROMPT),
-                HumanMessage(content=format_risk_context(state["case_packet"])),
-                *state["messages"],
+                HumanMessage(content=prompt),
+                *state.messages,
             ]
         )
-
         return {
-            "messages": [response],
-            "llm_calls": state.get("llm_calls", 0) + 1,
+            "messages": [*state.messages, response],
+            "llm_calls": state.llm_calls + 1,
         }
 
     return risk_agent_node
 
 
-def create_finalise_risk_analysis_node(structured_model):
+@traceable(name="risk_agent_merge_tool_result_node", run_type="chain")
+def merge_risk_tool_result_node(state):
+    tool_results = dict(state.tool_results)
+    previous_tool_calls = list(state.previous_tool_calls)
 
-    def finalise_risk_analysis_node(state):
-        analysis = structured_model.invoke(
-            [
-                SystemMessage(
-                    content=(
-                        RISK_AGENT_SYSTEM_PROMPT
-                        + """
-Return the final structured risk analysis.
-Use only the supplied case packet and retrieved tool outputs.
-Do not make a final claim or payment decision.
-"""
-                    )
-                ),
-                HumanMessage(
-                    content=format_risk_context(state["case_packet"])
-                ),
-                *state["messages"],
-            ]
+    for message in state.messages:
+        tool_call_id = getattr(message, "tool_call_id", None)
+        tool_name = getattr(message, "name", None)
+        if tool_call_id is None or not tool_name or tool_name in tool_results:
+            continue
+        parsed_result = _parse_tool_result_content(getattr(message, "content", ""))
+        tool_results[tool_name] = parsed_result
+        previous_tool_calls.append(
+            ToolExecutionRecord(
+                tool_name=tool_name,
+                tool_arguments={},
+                reason="Tool executed by risk agent through ToolNode.",
+                result=parsed_result,
+            )
         )
 
-        return {
-            "risk_analysis": analysis,
-        }
+    return {
+        "tool_results": tool_results,
+        "previous_tool_calls": previous_tool_calls,
+    }
+
+
+@traceable(name="risk_agent_finalise_node", run_type="chain")
+def create_finalise_risk_analysis_node(structured_model):
+    def finalise_risk_analysis_node(state):
+        prompt = generate_final_risk_analysis_prompt(
+            state.case_packet,
+            state.tool_results,
+        )
+        analysis = structured_model.invoke(
+            [
+                SystemMessage(content=RISK_AGENT_SYSTEM_PROMPT),
+                HumanMessage(content=prompt),
+                *state.messages,
+            ]
+        )
+        if isinstance(analysis, RiskAnalysisSchema):
+            return {"risk_analysis": analysis}
+        return {"risk_analysis": RiskAnalysisSchema(**analysis)}
 
     return finalise_risk_analysis_node
+
+
+def _parse_tool_result_content(content):
+    if isinstance(content, dict):
+        return content
+    if isinstance(content, list):
+        return {"content": content}
+    if isinstance(content, str):
+        try:
+            return json.loads(content)
+        except Exception:
+            return {"content": content}
+    return {"content": content}

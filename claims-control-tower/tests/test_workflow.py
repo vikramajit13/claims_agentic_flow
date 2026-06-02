@@ -1,5 +1,6 @@
 from app.database import get_store
 from app.agent.state import claims_review_graph
+from app.agent.risk.risk_agent_graph import risk_agent_graph
 from app.models.claim import ClaimStatus
 from app.models.claim_document import DocumentType
 from app.models.workflow_run import WorkflowRunStatus
@@ -458,3 +459,94 @@ def test_claims_review_graph_recommends_human_review_for_high_risk_invoice_anoma
     assert graph_state["recommended_next_action"]["task_type"] == "PAYMENT_REVIEW"
     assert graph_state["recommended_next_action"]["priority"] == "HIGH"
     assert graph_state["recommended_next_action"]["requires_human_review"] is True
+
+
+def test_risk_agent_graph_executes_read_tools_and_returns_structured_risk_analysis():
+    claim_service = ClaimService()
+    policy_adapter = PolicyAdminAdapter()
+    case_packet_builder = CasePacketBuilder()
+
+    created = claim_service.submit_claim(
+        ClaimCreateRequest(
+            claim_number="RISK-AGENT-001",
+            customer_id=999,
+            policy_id=4,
+            claim_type="motor",
+            claim_amount=4200,
+            incident_date="2026-04-25",
+            description="Rear bumper damage after accident",
+            documents=[
+                DocumentUpload(
+                    document_type=DocumentType.INVOICE,
+                    file_name="repair-invoice.pdf",
+                    storage_url="s3://claims/repair-invoice.pdf",
+                    document_metadata={
+                        "invoice_date": "2026-04-20",
+                        "invoice_amount": 4200,
+                        "vendor_name": "ABC Repairs",
+                    },
+                ),
+                DocumentUpload(
+                    document_type=DocumentType.PHOTO,
+                    file_name="damage-photo.jpg",
+                    storage_url="s3://claims/damage-photo.jpg",
+                ),
+                DocumentUpload(
+                    document_type=DocumentType.REPAIR_ESTIMATE,
+                    file_name="repair-estimate.pdf",
+                    storage_url="s3://claims/repair-estimate.pdf",
+                ),
+            ],
+        )
+    )
+
+    claim = claim_service.get_claim(created.claim.id)
+    policy = policy_adapter.get_policy(claim.policy_id)
+    case_packet = case_packet_builder.build(
+        claim=claim,
+        policy=policy,
+        documents=claim_service.get_claim_documents(claim.id),
+        coverage_result={"is_valid": True, "reasons": []},
+        evidence_result={"is_valid": True, "reasons": [], "missing_documents": []},
+        risk_result={
+            "risk_score": 30,
+            "risk_level": "LOW",
+            "risk_factors": ["Claim amount is greater than 80% of coverage limit"],
+        },
+        guardrail_results=[
+            {
+                "code": "INVOICE_DATE_BEFORE_INCIDENT",
+                "decision": "REVIEW_REQUIRED",
+                "severity": "HIGH",
+                "message": "Invoice date 2026-04-20 predates incident date 2026-04-25",
+            },
+            {
+                "code": "REPEAT_CLAIMS_REVIEW_REQUIRED",
+                "decision": "REVIEW_REQUIRED",
+                "severity": "HIGH",
+                "message": "Customer has 3 claims in the last 12 months",
+            },
+        ],
+        recommendation={"recommendation": "REFER_TO_HUMAN", "reason": "Manual review required"},
+        claim_history_summary={"recent_30_day_claim_count": 0, "last_12_month_claim_count": 3},
+        workflow_run_id=321,
+    )
+
+    result = risk_agent_graph.invoke(
+        {
+            "case_packet": case_packet,
+            "tool_results": {},
+            "previous_tool_calls": [],
+            "selected_tool_decision": None,
+            "latest_tool_result": None,
+            "risk_analysis": None,
+            "llm_calls": 0,
+        }
+    )
+
+    assert result["risk_analysis"]["risk_level"] in {"MEDIUM", "HIGH"}
+    assert result["previous_tool_calls"]
+    assert {call["tool_name"] for call in result["previous_tool_calls"]} >= {
+        "get_claim_history",
+        "get_document_metadata",
+    }

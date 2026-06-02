@@ -4,23 +4,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-try:
-    from dotenv import load_dotenv
-except ModuleNotFoundError:  # pragma: no cover
-    load_dotenv = None
-
-try:
-    from langsmith import traceable as _traceable
-except ModuleNotFoundError:  # pragma: no cover
-    def _traceable(*args, **kwargs):
-        def decorator(fn):
-            return fn
-        return decorator
+from dotenv import load_dotenv
+from langsmith import traceable as _traceable
 
 
 def configure_langsmith() -> None:
-    if load_dotenv is None:
-        return
     project_root = Path(__file__).resolve().parents[2]
     env_path = project_root / ".env"
     if env_path.exists():

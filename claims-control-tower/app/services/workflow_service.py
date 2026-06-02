@@ -764,7 +764,12 @@ class WorkflowService:
         recommended_next_action = None
 
         if graph_state.get("evidence_analysis"):
-            evidence_analysis = EvidenceAnalysisSchema(**graph_state["evidence_analysis"])
+            evidence_payload = graph_state["evidence_analysis"]
+            evidence_analysis = (
+                evidence_payload
+                if isinstance(evidence_payload, EvidenceAnalysisSchema)
+                else EvidenceAnalysisSchema(**evidence_payload)
+            )
             self.audit.record_event(
                 workflow_run,
                 WorkflowEventType.AI_EVIDENCE_ANALYSIS_COMPLETED,
@@ -772,7 +777,12 @@ class WorkflowService:
                 evidence_analysis.dict(),
             )
         if graph_state.get("risk_analysis"):
-            risk_analysis = RiskAnalysisSchema(**graph_state["risk_analysis"])
+            risk_payload = graph_state["risk_analysis"]
+            risk_analysis = (
+                risk_payload
+                if isinstance(risk_payload, RiskAnalysisSchema)
+                else RiskAnalysisSchema(**risk_payload)
+            )
             self.audit.record_event(
                 workflow_run,
                 WorkflowEventType.AI_RISK_ANALYSIS_COMPLETED,
@@ -808,7 +818,12 @@ class WorkflowService:
             )
 
         if graph_state.get("adjuster_briefing"):
-            adjuster_briefing = AdjusterBriefingSchema(**graph_state["adjuster_briefing"])
+            briefing_payload = graph_state["adjuster_briefing"]
+            adjuster_briefing = (
+                briefing_payload
+                if isinstance(briefing_payload, AdjusterBriefingSchema)
+                else AdjusterBriefingSchema(**briefing_payload)
+            )
             self.audit.record_event(
                 workflow_run,
                 WorkflowEventType.AI_ADJUSTER_BRIEFING_GENERATED,
@@ -821,7 +836,12 @@ class WorkflowService:
                 adjuster_briefing=adjuster_briefing.dict(),
             )
         if graph_state.get("recommended_next_action"):
-            recommended_next_action = NextActionRecommendation(**graph_state["recommended_next_action"])
+            next_action_payload = graph_state["recommended_next_action"]
+            recommended_next_action = (
+                next_action_payload
+                if isinstance(next_action_payload, NextActionRecommendation)
+                else NextActionRecommendation(**next_action_payload)
+            )
 
         return {
             "graph_state": graph_state,

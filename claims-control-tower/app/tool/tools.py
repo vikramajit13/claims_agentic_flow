@@ -1,18 +1,4 @@
-try:
-    from langchain_core.tools import tool
-except ModuleNotFoundError:  # pragma: no cover
-    class _FallbackTool:
-        def __init__(self, fn):
-            self._fn = fn
-            self.invoke = lambda payload: fn(**payload)
-
-        def __call__(self, *args, **kwargs):
-            return self._fn(*args, **kwargs)
-
-    def tool(*args, **kwargs):
-        def decorator(fn):
-            return _FallbackTool(fn)
-        return decorator
+from langchain_core.tools import tool
 from app.services.observability import traceable
 from app.models.workflow_event import WorkflowEventType
 from app.repositories.claim_repository import ClaimRepository

@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from typing import Any
 from urllib import error, request
 from app.services.observability import traceable
@@ -9,9 +10,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 
 class OllamaAsyncService:
-    def __init__(self, base_url: str = "http://localhost:11434", default_model: str = "llama3.1:8b"):
-        self.base_url = f"{base_url.rstrip('/')}/api/generate"
-        self.default_model = default_model
+    def __init__(self, base_url: str | None = None, default_model: str | None = None):
+        resolved_base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        resolved_model = default_model or os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+        self.base_url = f"{resolved_base_url.rstrip('/')}/api/generate"
+        self.default_model = resolved_model
         self.timeout_seconds = 30
     @traceable(name="ollama_generate_structured", run_type="llm")
     def generate_structured(self, prompt: str, fallback: dict[str, Any], model: str | None = None) -> dict[str, Any]:
