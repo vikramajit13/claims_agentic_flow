@@ -14,6 +14,7 @@ class HumanTaskStatus(str, Enum):
 
 
 class HumanTaskType(str, Enum):
+    AGENT_REVIEW = "AGENT_REVIEW"
     CLAIM_REVIEW = "CLAIM_REVIEW"
     FRAUD_REVIEW = "FRAUD_REVIEW"
     PAYMENT_REVIEW = "PAYMENT_REVIEW"

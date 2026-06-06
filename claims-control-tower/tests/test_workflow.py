@@ -1,12 +1,15 @@
 from app.database import get_store
 from app.agent.state import claims_review_graph
 from app.agent.risk.risk_agent_graph import risk_agent_graph
+from app.config import settings
 from app.models.claim import ClaimStatus
 from app.models.claim_document import DocumentType
 from app.models.workflow_run import WorkflowRunStatus
+from app.schemas.Adjuster_briefing_schema import AdjusterBriefingSchema
 from app.services.business_guardrails.guardrail_config import GuardrailConfig
 from app.schemas.claim_schema import ClaimCreateRequest, DocumentUpload
 from app.schemas.human_task_schema import HumanTaskDecisionRequest
+from app.schemas.next_action_recommendation_schema import NextActionRecommendation
 from app.services.case_packet import CasePacketBuilder
 from app.services.claim_service import ClaimService
 from app.services.human_task_service import HumanTaskService
@@ -550,3 +553,72 @@ def test_risk_agent_graph_executes_read_tools_and_returns_structured_risk_analys
         "get_claim_history",
         "get_document_metadata",
     }
+
+
+def test_agent_hitl_interrupt_pauses_after_agent_review(monkeypatch):
+    claim_service = ClaimService()
+    workflow_service = WorkflowService()
+    original_flag = settings.agent_hitl_interrupt_enabled
+    object.__setattr__(settings, "agent_hitl_interrupt_enabled", True)
+    try:
+        created = claim_service.submit_claim(
+            ClaimCreateRequest(
+                claim_number="HITL-001",
+                customer_id=100,
+                policy_id=1,
+                claim_type="motor",
+                claim_amount=4200,
+                incident_date="2026-03-05",
+                description="Minor collision with standard evidence attached",
+                documents=[
+                    DocumentUpload(
+                        document_type=DocumentType.PHOTO,
+                        file_name="photo.jpg",
+                        storage_url="s3://claims/photo.jpg",
+                    ),
+                    DocumentUpload(
+                        document_type=DocumentType.REPAIR_ESTIMATE,
+                        file_name="estimate.pdf",
+                        storage_url="s3://claims/estimate.pdf",
+                    ),
+                ],
+            )
+        )
+
+        fake_ai_review = {
+            "graph_state": {},
+            "evidence_analysis": None,
+            "risk_analysis": None,
+            "adjuster_briefing": AdjusterBriefingSchema(
+                briefing_summary="AI summary",
+                why_workflow_paused=["Manual confirmation required after AI review"],
+                key_risk_factors=[],
+                evidence_concerns=[],
+                recommended_adjuster_actions=["Confirm payout"],
+                questions_for_customer_or_repairer=[],
+                decision_options=[],
+                customer_safe_message="We are completing a final human review before payment.",
+            ),
+            "recommended_next_action": NextActionRecommendation(
+                next_action="PROCEED_TO_PAYMENT_GUARDRAILS",
+                reason="Proceed after human confirmation",
+                task_type=None,
+                priority="MEDIUM",
+                requires_human_review=False,
+                requires_more_information=False,
+                blocking_reasons=[],
+                supporting_factors=["AI review completed"],
+            ),
+        }
+
+        monkeypatch.setattr(workflow_service, "_run_ai_claim_review", lambda *args, **kwargs: fake_ai_review)
+        result = workflow_service.start_claim_workflow(created.claim.id)
+
+        assert result.workflow_run.status == WorkflowRunStatus.WAITING_FOR_HUMAN
+        assert result.human_task_id is not None
+        task = HumanTaskService().get_task(result.human_task_id)
+        assert task.task_type.value == "AGENT_REVIEW"
+        events = workflow_service.get_workflow_run_events(result.workflow_run.id)
+        assert any(event.event_type.value == "ai_hitl_interrupt_created" for event in events)
+    finally:
+        object.__setattr__(settings, "agent_hitl_interrupt_enabled", original_flag)

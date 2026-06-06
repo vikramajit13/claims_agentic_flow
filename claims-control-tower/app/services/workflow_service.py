@@ -37,6 +37,7 @@ from app.services.risk_signal_service import RiskSignalService
 from app.services.case_packet import CasePacketBuilder
 from app.services.adjuster_briefing_service import AdjusterBriefingAgent
 from app.agent.state import claims_review_graph
+from app.config import settings
 from app.schemas.evidence_analysis_schema import EvidenceAnalysisSchema
 from app.schemas.investigation_schema import InformationGap, ToolExecutionRecord
 from app.schemas.Adjuster_briefing_schema import AdjusterBriefingSchema
@@ -332,6 +333,44 @@ class WorkflowService:
                     reason=recommendation.reason,
                     risk_factors=recommendation.risk_factors,
                     recommendation=recommendation,
+                    adjuster_briefing=adjuster_briefing.dict() if adjuster_briefing else None,
+                )
+
+            if self._should_trigger_agent_hitl_interrupt(recommendation, recommended_next_action):
+                interrupt_reason = "Human approval required after AI agent review before automatic workflow progression"
+                interrupt_factors = self._build_agent_hitl_risk_factors(
+                    recommendation,
+                    recommended_next_action,
+                    risk_analysis,
+                )
+                self.audit.record_event(
+                    workflow_run,
+                    WorkflowEventType.AI_HITL_INTERRUPT_CREATED,
+                    WorkflowRunStep.HUMAN_REVIEW.value,
+                    {
+                        "reason": interrupt_reason,
+                        "recommended_next_action": (
+                            recommended_next_action.dict() if recommended_next_action else None
+                        ),
+                        "risk_analysis": risk_analysis.dict() if risk_analysis else None,
+                    },
+                    adjuster_briefing=adjuster_briefing.dict() if adjuster_briefing else None,
+                )
+                interrupt_recommendation = AdjudicationRecommendation(
+                    recommendation=RecommendationDecision.REFER_TO_HUMAN,
+                    reason=interrupt_reason,
+                    recommended_amount=recommendation.recommended_amount,
+                    requires_human_review=True,
+                    risk_factors=interrupt_factors,
+                    recommended_action="AI_HITL_INTERRUPT",
+                )
+                return self._pause_for_human_review(
+                    workflow_run=workflow_run,
+                    claim_id=claim.id,
+                    task_type=HumanTaskType.AGENT_REVIEW,
+                    reason=interrupt_reason,
+                    risk_factors=interrupt_factors,
+                    recommendation=interrupt_recommendation,
                     adjuster_briefing=adjuster_briefing.dict() if adjuster_briefing else None,
                 )
 
@@ -703,6 +742,38 @@ class WorkflowService:
         if {"INVOICE_DATE_BEFORE_INCIDENT", "REPEAT_CLAIMS_REVIEW_REQUIRED"}.issubset(codes):
             return "Auto-payment blocked due to invoice anomaly and high claim frequency"
         return "; ".join(result.message for result in results)
+
+    def _should_trigger_agent_hitl_interrupt(
+        self,
+        recommendation: AdjudicationRecommendation,
+        recommended_next_action: NextActionRecommendation | None,
+    ) -> bool:
+        if not settings.agent_hitl_interrupt_enabled:
+            return False
+        if recommendation.requires_human_review:
+            return False
+        if recommendation.recommendation != RecommendationDecision.APPROVE:
+            return False
+        if recommended_next_action is None:
+            return True
+        return recommended_next_action.next_action == "PROCEED_TO_PAYMENT_GUARDRAILS"
+
+    def _build_agent_hitl_risk_factors(
+        self,
+        recommendation: AdjudicationRecommendation,
+        recommended_next_action: NextActionRecommendation | None,
+        risk_analysis: RiskAnalysisSchema | None,
+    ) -> list[str]:
+        factors = list(recommendation.risk_factors)
+        if recommended_next_action is not None:
+            factors.extend(recommended_next_action.supporting_factors)
+        if risk_analysis is not None:
+            factors.extend(risk_analysis.key_risk_drivers or risk_analysis.primary_risk_drivers)
+        deduped: list[str] = []
+        for factor in factors:
+            if factor and factor not in deduped:
+                deduped.append(factor)
+        return deduped
 
     def _pause_for_human_review(
         self,

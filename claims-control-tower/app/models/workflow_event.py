@@ -28,6 +28,7 @@ class WorkflowEventType(str, Enum):
     AI_INFORMATION_GAPS_IDENTIFIED = "ai_information_gaps_identified"
     AI_TOOL_EXECUTED = "ai_tool_executed"
     AI_ADJUSTER_BRIEFING_GENERATED = "ai_adjuster_briefing_generated"
+    AI_HITL_INTERRUPT_CREATED = "ai_hitl_interrupt_created"
     ADJUSTER_BRIEFING_CREATED = "adjuster_briefing_created"
     WORKFLOW_COMPLETED = "workflow_completed"
 
