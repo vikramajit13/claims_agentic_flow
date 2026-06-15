@@ -17,6 +17,9 @@ def create_risk_investigation_node(risk_agent_graph):
             },
             config={
                 "recursion_limit": 10,
+                "configurable": {
+                    "thread_id": str(state.case_packet.workflow_run_id)
+                }
             },
         )
 
