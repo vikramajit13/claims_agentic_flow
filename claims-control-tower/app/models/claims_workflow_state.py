@@ -22,6 +22,10 @@ class ClaimreviewState(BaseModel):
     recommended_next_action: NextActionRecommendation | None = None
     available_tools: list[str] = Field(default_factory=lambda: sorted(SAFE_READ_ONLY_TOOLS.keys()))
     errors: list[str] = Field(default_factory=list)
+    human_review_required: bool = False
+    human_task_id: int | None = None
+    human_decision: str | None = None
+    human_decision_notes: str | None = None
 
 
 ClaimsWorkflowState = ClaimreviewState
