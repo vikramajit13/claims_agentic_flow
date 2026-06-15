@@ -17,6 +17,13 @@ def create_claims_processing_state_graph() -> CompiledStateGraph:
     claims_graph.add_edge("analyse_evidence", "risk_investigation")
     claims_graph.add_edge("risk_investigation", "generate_briefing")
     claims_graph.add_edge("generate_briefing", "route_next_action")
+    claims_graph.add_conditional_edges(
+        "route_next_action",
+        lambda state: "human_review" if state.human_review_required else "end",
+        {
+            "human_review": "generate_briefing",
+            "end": "route_next_action",
+        },)
     claims_graph.set_entry_point("analyse_evidence")
     claims_graph.set_finish_point("route_next_action")
     return claims_graph.compile()
