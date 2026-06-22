@@ -1,17 +1,33 @@
 services:
-  claims-control-tower:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: claims-control-tower-postgres
+    environment:
+      POSTGRES_DB: claims_control_tower
+      POSTGRES_USER: claims
+      POSTGRES_PASSWORD: claims
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
     build:
-      context: .
+      context: ./apps/api
       dockerfile: Dockerfile
-    container_name: claims-control-tower
+    container_name: claims-control-tower-api
     ports:
       - "8000:8000"
     env_file:
       - .env
     environment:
       PYTHONPATH: /app
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      DATABASE_URL: postgresql+psycopg://claims:claims@postgres:5432/claims_control_tower
+      USE_MOCK_S3: "true"
+      USE_MOCK_OCR: "true"
+    depends_on:
+      - postgres
     restart: unless-stopped
+
+volumes:
+  pgdata:

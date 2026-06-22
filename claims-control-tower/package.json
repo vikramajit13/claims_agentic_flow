@@ -1,0 +1,12 @@
+{
+  "name": "claims-control-tower",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "api:test": "cd apps/api && pytest",
+    "web:dev": "cd apps/web && npm run dev",
+    "web:build": "cd apps/web && npm run build"
+  }
+}

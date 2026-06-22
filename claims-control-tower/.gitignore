@@ -1,0 +1,6 @@
+__pycache__/
+.pytest_cache/
+.DS_Store
+.env.local
+apps/web/node_modules/
+apps/web/dist/
