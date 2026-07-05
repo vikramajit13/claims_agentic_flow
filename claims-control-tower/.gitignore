@@ -4,3 +4,9 @@ __pycache__/
 .env.local
 apps/web/node_modules/
 apps/web/dist/
+.terraform/
+.terraform.lock.hcl
+*.tfplan
+*.tfstate
+*.tfstate.*
+infra/**/.terraform/

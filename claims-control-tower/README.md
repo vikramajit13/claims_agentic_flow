@@ -34,6 +34,7 @@ Workflow API:
 
 - [apps/api](/Users/vikramsingh/claims_agentic_flow/claims-control-tower/apps/api)
 - [apps/web](/Users/vikramsingh/claims_agentic_flow/claims-control-tower/apps/web)
+- [infra](/Users/vikramsingh/claims_agentic_flow/claims-control-tower/infra)
 
 ## Docker
 
@@ -73,3 +74,18 @@ npm run web:dev
 3. Add LangSmith eval datasets and runners
 4. Add GitHub Actions for Fargate, Lambda, and static frontend deploys
 5. Add SQS or Step Functions for deeper multi-agent orchestration
+
+## GitHub Actions
+
+Starter GitHub Actions are included for:
+
+- CI: `.github/workflows/ci.yml`
+- AWS deploy: `.github/workflows/deploy-aws.yml`
+
+Setup notes are in:
+
+- [docs/github-actions-aws.md](/Users/vikramsingh/claims_agentic_flow/claims-control-tower/docs/github-actions-aws.md)
+
+Terraform infrastructure notes are in:
+
+- [infra/README.md](/Users/vikramsingh/claims_agentic_flow/claims-control-tower/infra/README.md)
