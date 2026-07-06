@@ -8,10 +8,12 @@ from langsmith import traceable as _traceable
 
 
 def configure_langsmith() -> None:
-    project_root = Path(__file__).resolve().parents[3]
-    env_path = project_root / ".env"
-    if env_path.exists():
-        load_dotenv(env_path, override=False)
+    resolved = Path(__file__).resolve()
+    for parent in resolved.parents:
+        env_path = parent / ".env"
+        if env_path.exists():
+            load_dotenv(env_path, override=False)
+            break
     os.environ.setdefault("LANGSMITH_TRACING", "false")
 
 

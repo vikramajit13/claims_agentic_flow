@@ -29,9 +29,27 @@ Workflow API:
 - explicit upload confirmation before OCR
 - mock OCR over S3-backed documents
 - OCR queue handoff starter for a future worker service
+- Lambda-ready S3 event -> SQS -> OCR processing flow
 - mock vector embedding persistence for OCR text
 - LangSmith observability wiring
 - React/Vite dashboard placeholder
+
+## S3 And OCR Flow
+
+Current local fallback flow:
+
+1. `POST /v1/claims/{claim_id}/documents/presign`
+2. client uploads the file
+3. `POST /v1/claims/{claim_id}/documents/{document_id}/complete-upload`
+4. mock OCR runs immediately or mock queue state is created
+
+Target AWS flow now scaffolded in code:
+
+1. client uploads the file to S3
+2. S3 object-created event triggers a Lambda
+3. that Lambda finds the document record and pushes an OCR job to SQS
+4. a second Lambda consumes SQS
+5. OCR is executed and the document record is updated with extracted text and embeddings
 
 ## Monorepo Layout
 

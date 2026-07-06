@@ -146,7 +146,7 @@ class ClaimService:
                     document.upload_status = DocumentStatus.OCR_COMPLETED.value
                     document.ocr_job_id = None
                     document.ocr_error = None
-                else:
+                elif settings.use_mock_s3:
                     document.ocr_job_id = self.ocr_queue_service.enqueue_document(
                         document_id=document.id,
                         claim_id=claim_id,
@@ -156,6 +156,11 @@ class ClaimService:
                     )
                     document.upload_status = DocumentStatus.OCR_QUEUED.value
                     document.ocr_status = OcrStatus.PENDING.value
+                    document.ocr_error = None
+                else:
+                    document.upload_status = DocumentStatus.UPLOADED.value
+                    document.ocr_status = OcrStatus.PENDING.value
+                    document.ocr_job_id = None
                     document.ocr_error = None
             else:
                 document.ocr_status = OcrStatus.NOT_REQUESTED.value
@@ -171,7 +176,7 @@ class ClaimService:
     async def _claim_response(self, session, claim: ClaimRecord) -> ClaimResponse:
         documents = (
             await session.execute(
-            select(ClaimDocumentRecord).where(ClaimDocumentRecord.claim_id == claim.id).order_by(ClaimDocumentRecord.id)
+                select(ClaimDocumentRecord).where(ClaimDocumentRecord.claim_id == claim.id).order_by(ClaimDocumentRecord.id)
             )
         ).scalars().all()
         return ClaimResponse(

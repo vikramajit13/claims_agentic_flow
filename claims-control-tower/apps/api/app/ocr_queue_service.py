@@ -13,8 +13,33 @@ class OcrQueueService:
     def __init__(self) -> None:
         self.client = None if settings.use_mock_sqs else boto3.client("sqs", region_name=settings.aws_region)
 
+    def build_ocr_job_payload(
+        self,
+        *,
+        document_id: int,
+        claim_id: int,
+        s3_bucket: str,
+        s3_key: str,
+        s3_uri: str,
+    ) -> dict:
+        return {
+            "event_type": "document_ready_for_ocr",
+            "document_id": document_id,
+            "claim_id": claim_id,
+            "s3_bucket": s3_bucket,
+            "s3_key": s3_key,
+            "s3_uri": s3_uri,
+        }
+
     @traceable(name="enqueue_ocr_job", run_type="tool")
     def enqueue_document(self, *, document_id: int, claim_id: int, s3_bucket: str, s3_key: str, s3_uri: str) -> str:
+        payload = self.build_ocr_job_payload(
+            document_id=document_id,
+            claim_id=claim_id,
+            s3_bucket=s3_bucket,
+            s3_key=s3_key,
+            s3_uri=s3_uri,
+        )
         if settings.use_mock_sqs or not settings.ocr_queue_url:
             return f"mock-ocr-job-{document_id}-{uuid.uuid4()}"
 
@@ -23,14 +48,6 @@ class OcrQueueService:
 
         response = self.client.send_message(
             QueueUrl=settings.ocr_queue_url,
-            MessageBody=json.dumps(
-                {
-                    "document_id": document_id,
-                    "claim_id": claim_id,
-                    "s3_bucket": s3_bucket,
-                    "s3_key": s3_key,
-                    "s3_uri": s3_uri,
-                }
-            ),
+            MessageBody=json.dumps(payload),
         )
         return response["MessageId"]
