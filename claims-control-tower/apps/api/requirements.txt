@@ -3,6 +3,7 @@ uvicorn[standard]
 pydantic
 sqlalchemy
 psycopg[binary]
+aiosqlite
 pgvector
 boto3
 httpx

@@ -20,6 +20,10 @@ class DocumentPresignRequest(BaseModel):
     run_ocr: bool = True
 
 
+class DocumentUploadCompleteRequest(BaseModel):
+    trigger_ocr: bool | None = None
+
+
 class DocumentPresignResponse(BaseModel):
     document_id: int
     upload_url: str
@@ -38,7 +42,10 @@ class ClaimDocumentResponse(BaseModel):
     s3_bucket: str
     s3_key: str
     upload_status: DocumentStatus
+    ocr_requested: bool
     ocr_status: OcrStatus
+    ocr_job_id: str | None = None
+    ocr_error: str | None = None
     ocr_text: str | None = None
     created_at: str
     updated_at: str

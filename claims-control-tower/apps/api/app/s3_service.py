@@ -30,3 +30,14 @@ class S3Service:
             Params=params,
             ExpiresIn=settings.s3_presign_expiry_seconds,
         )
+
+    def object_exists(self, *, bucket: str, key: str) -> bool:
+        if settings.use_mock_s3:
+            return True
+        if self.client is None:
+            raise RuntimeError("S3 client is not configured for non-mock usage.")
+        try:
+            self.client.head_object(Bucket=bucket, Key=key)
+        except self.client.exceptions.ClientError:
+            return False
+        return True

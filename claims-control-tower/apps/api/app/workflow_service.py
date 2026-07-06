@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.db import ClaimDocumentRecord, ClaimRecord, WorkflowRunRecord, get_session
-from app.enums import ClaimStatus, OcrStatus, WorkflowStatus, WorkflowStep
+from app.enums import ClaimStatus, DocumentStatus, OcrStatus, WorkflowStatus, WorkflowStep
 from app.observability import traceable
 from app.schemas import WorkflowRunResponse, WorkflowStartRequest
 
@@ -17,14 +17,16 @@ def _now():
 
 class WorkflowService:
     @traceable(name="start_mock_claim_workflow", run_type="chain")
-    def start_claim_workflow(self, claim_id: int, request: WorkflowStartRequest) -> WorkflowRunResponse:
-        with get_session() as session:
-            claim = session.get(ClaimRecord, claim_id)
+    async def start_claim_workflow(self, claim_id: int, request: WorkflowStartRequest) -> WorkflowRunResponse:
+        async with get_session() as session:
+            claim = await session.get(ClaimRecord, claim_id)
             if claim is None:
                 raise KeyError(claim_id)
 
-            documents = session.execute(
+            documents = (
+                await session.execute(
                 select(ClaimDocumentRecord).where(ClaimDocumentRecord.claim_id == claim_id)
+                )
             ).scalars().all()
 
             hitl_required = settings.default_hitl_required if request.hitl_required is None else request.hitl_required
@@ -32,6 +34,11 @@ class WorkflowService:
                 status = WorkflowStatus.WAITING_FOR_DOCUMENTS
                 step = WorkflowStep.DOCUMENT_COLLECTION
                 next_action = "Upload claim documents through the pre-signed S3 flow before starting the graph."
+                claim.status = ClaimStatus.WAITING_FOR_DOCUMENTS.value
+            elif any(document.upload_status == DocumentStatus.PENDING_UPLOAD.value for document in documents):
+                status = WorkflowStatus.WAITING_FOR_DOCUMENTS
+                step = WorkflowStep.DOCUMENT_COLLECTION
+                next_action = "One or more documents have not been confirmed as uploaded yet."
                 claim.status = ClaimStatus.WAITING_FOR_DOCUMENTS.value
             elif any(document.ocr_status == OcrStatus.PENDING.value for document in documents):
                 status = WorkflowStatus.CREATED
@@ -61,8 +68,8 @@ class WorkflowService:
             )
             session.add(workflow)
             claim.updated_at = _now()
-            session.commit()
-            session.refresh(workflow)
+            await session.commit()
+            await session.refresh(workflow)
             return WorkflowRunResponse(
                 id=workflow.id,
                 claim_id=workflow.claim_id,

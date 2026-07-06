@@ -16,6 +16,7 @@ Claims APIs:
 - `GET /v1/claims`
 - `GET /v1/claims/{claim_id}`
 - `POST /v1/claims/{claim_id}/documents/presign`
+- `POST /v1/claims/{claim_id}/documents/{document_id}/complete-upload`
 
 Workflow API:
 
@@ -25,7 +26,9 @@ Workflow API:
 
 - PostgreSQL + pgvector support for persistent storage
 - pre-signed S3 upload starter
+- explicit upload confirmation before OCR
 - mock OCR over S3-backed documents
+- OCR queue handoff starter for a future worker service
 - mock vector embedding persistence for OCR text
 - LangSmith observability wiring
 - React/Vite dashboard placeholder

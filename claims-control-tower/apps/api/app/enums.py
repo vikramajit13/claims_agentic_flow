@@ -12,6 +12,7 @@ class ClaimStatus(StrEnum):
 class DocumentStatus(StrEnum):
     PENDING_UPLOAD = "pending_upload"
     UPLOADED = "uploaded"
+    OCR_QUEUED = "ocr_queued"
     OCR_COMPLETED = "ocr_completed"
 
 
