@@ -6,6 +6,7 @@ from app.config import settings
 from app.db import init_db
 from app.observability import configure_langsmith
 from app.routers.claims import router as claims_router
+from app.routers.internal import router as internal_router
 from app.routers.workflows import router as workflows_router
 
 configure_langsmith()
@@ -19,6 +20,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.include_router(claims_router)
+app.include_router(internal_router)
 app.include_router(workflows_router)
 
 

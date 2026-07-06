@@ -47,9 +47,12 @@ Target AWS flow now scaffolded in code:
 
 1. client uploads the file to S3
 2. S3 object-created event triggers a Lambda
-3. that Lambda finds the document record and pushes an OCR job to SQS
+3. that Lambda reads S3 object metadata, updates the API through an internal callback, and pushes an OCR job to SQS
 4. a second Lambda consumes SQS
-5. OCR is executed and the document record is updated with extracted text and embeddings
+5. the second Lambda calls the API OCR pipeline
+6. OCR is executed and the document record is updated with extracted text and embeddings
+
+The presign response now includes `upload_headers`. Your uploader must send those headers with the S3 PUT so the event Lambda can recover the `document_id`, `claim_id`, and `run_ocr` flags from S3 object metadata.
 
 ## Monorepo Layout
 

@@ -23,6 +23,7 @@ class Settings:
     s3_bucket_default: str = os.getenv("S3_BUCKET_DEFAULT", "mock-claims-documents")
     s3_presign_expiry_seconds: int = int(os.getenv("S3_PRESIGN_EXPIRY_SECONDS", "900"))
     ocr_queue_url: str | None = os.getenv("OCR_QUEUE_URL")
+    internal_service_token: str | None = os.getenv("INTERNAL_SERVICE_TOKEN")
     use_mock_s3: bool = _env_flag("USE_MOCK_S3", False)
     use_mock_ocr: bool = _env_flag("USE_MOCK_OCR", True)
     use_mock_sqs: bool = _env_flag("USE_MOCK_SQS", True)

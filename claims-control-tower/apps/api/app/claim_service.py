@@ -72,12 +72,6 @@ class ClaimService:
                 raise KeyError(claim_id)
 
             s3_uri, bucket, key = self.s3_service.build_object_location(claim_id, request.file_name)
-            upload_url = self.s3_service.create_presigned_upload(
-                bucket=bucket,
-                key=key,
-                content_type=request.content_type,
-            )
-
             document = ClaimDocumentRecord(
                 claim_id=claim.id,
                 file_name=request.file_name,
@@ -96,6 +90,18 @@ class ClaimService:
                 updated_at=_now(),
             )
             session.add(document)
+            await session.flush()
+
+            upload_url, upload_headers = self.s3_service.create_presigned_upload(
+                bucket=bucket,
+                key=key,
+                content_type=request.content_type,
+                metadata={
+                    "document-id": str(document.id),
+                    "claim-id": str(claim.id),
+                    "run-ocr": str(request.run_ocr).lower(),
+                },
+            )
 
             claim.status = ClaimStatus.SUBMITTED.value
             claim.updated_at = _now()
@@ -105,6 +111,7 @@ class ClaimService:
             return DocumentPresignResponse(
                 document_id=document.id,
                 upload_url=upload_url,
+                upload_headers=upload_headers,
                 s3_uri=s3_uri,
                 s3_bucket=bucket,
                 s3_key=key,

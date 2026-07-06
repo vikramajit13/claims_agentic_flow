@@ -101,6 +101,12 @@ resource "aws_ecs_task_definition" "api" {
             valueFrom = var.database_url_secret_arn
           }
         ],
+        var.internal_service_token_secret_arn == null ? [] : [
+          {
+            name      = "INTERNAL_SERVICE_TOKEN"
+            valueFrom = var.internal_service_token_secret_arn
+          }
+        ],
         var.langsmith_api_key_secret_arn == null ? [] : [
           {
             name      = "LANGSMITH_API_KEY"

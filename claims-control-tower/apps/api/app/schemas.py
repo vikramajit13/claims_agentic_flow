@@ -28,6 +28,7 @@ class DocumentPresignResponse(BaseModel):
     document_id: int
     upload_url: str
     upload_method: str = "PUT"
+    upload_headers: dict[str, str] = Field(default_factory=dict)
     s3_uri: str
     s3_bucket: str
     s3_key: str
@@ -80,3 +81,16 @@ class WorkflowRunResponse(BaseModel):
     notes: list[str] = Field(default_factory=list)
     created_at: str
     updated_at: str
+
+
+class InternalS3ObjectCreatedRequest(BaseModel):
+    document_id: int
+    claim_id: int
+    s3_bucket: str
+    s3_key: str
+    queued_for_ocr: bool = False
+    ocr_job_id: str | None = None
+
+
+class InternalProcessOcrRequest(BaseModel):
+    document_id: int

@@ -124,6 +124,12 @@ variable "langsmith_api_key_secret_arn" {
   default     = null
 }
 
+variable "internal_service_token_secret_arn" {
+  description = "Secrets Manager ARN for INTERNAL_SERVICE_TOKEN used by internal Lambda to API callbacks."
+  type        = string
+  default     = null
+}
+
 variable "frontend_bucket_name_override" {
   description = "Optional override for the frontend bucket name."
   type        = string

@@ -71,6 +71,55 @@ class DocumentPipelineService:
                 "ocr_job_id": document.ocr_job_id,
             }
 
+    @traceable(name="mark_document_uploaded", run_type="chain")
+    async def mark_document_uploaded(
+        self,
+        *,
+        document_id: int,
+        claim_id: int,
+        s3_bucket: str,
+        s3_key: str,
+        queued_for_ocr: bool,
+        ocr_job_id: str | None,
+    ) -> dict:
+        async with get_session() as session:
+            document = await session.get(ClaimDocumentRecord, document_id)
+            if document is None or document.claim_id != claim_id:
+                return {
+                    "status": "ignored",
+                    "reason": "document_not_found",
+                    "document_id": document_id,
+                    "claim_id": claim_id,
+                }
+
+            claim = await session.get(ClaimRecord, claim_id)
+
+            document.s3_bucket = s3_bucket
+            document.s3_key = s3_key
+            document.upload_status = (
+                DocumentStatus.OCR_QUEUED.value if queued_for_ocr and document.ocr_requested else DocumentStatus.UPLOADED.value
+            )
+            document.ocr_status = (
+                OcrStatus.PENDING.value if queued_for_ocr and document.ocr_requested else OcrStatus.NOT_REQUESTED.value
+            )
+            document.ocr_job_id = ocr_job_id if queued_for_ocr and document.ocr_requested else None
+            document.ocr_error = None
+
+            if claim is not None:
+                claim.status = ClaimStatus.SUBMITTED.value
+
+            await session.commit()
+            await session.refresh(document)
+
+            return {
+                "status": "processed",
+                "document_id": document.id,
+                "claim_id": document.claim_id,
+                "upload_status": document.upload_status,
+                "ocr_status": document.ocr_status,
+                "ocr_job_id": document.ocr_job_id,
+            }
+
     @traceable(name="process_ocr_job", run_type="chain")
     async def process_ocr_job(self, *, document_id: int) -> dict:
         async with get_session() as session:

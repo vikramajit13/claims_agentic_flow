@@ -1,2 +1,3 @@
 database_url_secret_arn        = "arn:aws:secretsmanager:ap-southeast-2:819926065191:secret:claims-agent/dev/database-url"
+internal_service_token_secret_arn = "arn:aws:secretsmanager:ap-southeast-2:819926065191:secret:claims-agent/dev/internal-service-token"
 langsmith_api_key_secret_arn   = "arn:aws:secretsmanager:ap-southeast-2:819926065191:secret:claims-agent/dev/langsmith-api-key"

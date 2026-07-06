@@ -73,6 +73,16 @@ output "ocr_queue_url" {
   value       = aws_sqs_queue.ocr_jobs.id
 }
 
+output "s3_event_lambda_name" {
+  description = "Lambda name for S3 object created to OCR queue bridge."
+  value       = aws_lambda_function.s3_event_to_ocr_queue.function_name
+}
+
+output "ocr_queue_lambda_name" {
+  description = "Lambda name for OCR SQS consumer."
+  value       = aws_lambda_function.ocr_queue_to_api.function_name
+}
+
 output "alb_dns_name" {
   description = "Public API ALB DNS name."
   value       = aws_lb.api.dns_name
