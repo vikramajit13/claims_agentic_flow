@@ -48,6 +48,11 @@ class ClaimDocumentResponse(BaseModel):
     ocr_job_id: str | None = None
     ocr_error: str | None = None
     ocr_text: str | None = None
+    normalized_text: str | None = None
+    validation_results: dict | None = None
+    document_classification: dict | None = None
+    extracted_fields: dict | None = None
+    quality_assessment: dict | None = None
     created_at: str
     updated_at: str
 

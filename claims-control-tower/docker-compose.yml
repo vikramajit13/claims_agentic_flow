@@ -25,8 +25,16 @@ services:
       DATABASE_URL: postgresql+psycopg://claims:claims@postgres:5432/claims_control_tower
       USE_MOCK_S3: "true"
       USE_MOCK_OCR: "true"
+      USE_MOCK_SQS: "true"
+      ENABLE_LLM_DOCUMENT_INTELLIGENCE: ${ENABLE_LLM_DOCUMENT_INTELLIGENCE:-false}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://host.docker.internal:11434/v1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DOCUMENT_INTELLIGENCE_MODEL: ${DOCUMENT_INTELLIGENCE_MODEL:-llama3.1:8b}
+      ALLOW_KEYLESS_LOCAL_LLM: ${ALLOW_KEYLESS_LOCAL_LLM:-true}
     depends_on:
       - postgres
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
 volumes:

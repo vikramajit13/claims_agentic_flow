@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.db import ClaimDocumentRecord, ClaimRecord, get_session
+from app.document_intelligence_service import DocumentIntelligenceOrchestrator
 from app.enums import ClaimStatus, DocumentStatus, OcrStatus
 from app.observability import traceable
 from app.ocr_service import OCRService
@@ -31,6 +32,7 @@ class ClaimService:
         self.s3_service = S3Service()
         self.ocr_service = OCRService()
         self.ocr_queue_service = OcrQueueService()
+        self.document_intelligence_service = DocumentIntelligenceOrchestrator()
         self.vector_service = VectorService()
 
     @traceable(name="create_claim", run_type="chain")
@@ -143,13 +145,23 @@ class ClaimService:
             trigger_ocr = document.ocr_requested if request.trigger_ocr is None else request.trigger_ocr
             if trigger_ocr and document.ocr_requested:
                 if settings.use_mock_ocr:
-                    ocr_status, ocr_text = self.ocr_service.extract_from_s3(
+                    ocr_status, textract_result = self.ocr_service.extract_from_s3(
                         s3_uri=document.s3_uri,
                         file_name=document.file_name,
                     )
+                    intelligence_result = self.document_intelligence_service.process(
+                        file_name=document.file_name,
+                        textract_result=textract_result,
+                    )
                     document.ocr_status = ocr_status.value
-                    document.ocr_text = ocr_text
-                    document.embedding_vector = self.vector_service.embed_text(ocr_text)
+                    document.ocr_text = intelligence_result.raw_text
+                    document.normalized_text = intelligence_result.normalized_text
+                    document.textract_blocks = intelligence_result.textract_blocks
+                    document.validation_results = intelligence_result.validation_results
+                    document.document_classification = intelligence_result.document_classification
+                    document.extracted_fields = intelligence_result.extracted_fields
+                    document.quality_assessment = intelligence_result.quality_assessment
+                    document.embedding_vector = self.vector_service.embed_text(intelligence_result.normalized_text)
                     document.upload_status = DocumentStatus.OCR_COMPLETED.value
                     document.ocr_job_id = None
                     document.ocr_error = None
@@ -214,6 +226,11 @@ class ClaimService:
             ocr_job_id=document.ocr_job_id,
             ocr_error=document.ocr_error,
             ocr_text=document.ocr_text,
+            normalized_text=document.normalized_text,
+            validation_results=document.validation_results,
+            document_classification=document.document_classification,
+            extracted_fields=document.extracted_fields,
+            quality_assessment=document.quality_assessment,
             created_at=document.created_at.isoformat(),
             updated_at=document.updated_at.isoformat(),
         )

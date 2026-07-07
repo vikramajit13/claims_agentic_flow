@@ -66,6 +66,12 @@ class ClaimDocumentRecord(Base):
     ocr_job_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ocr_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     ocr_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalized_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    textract_blocks: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    validation_results: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    document_classification: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    extracted_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    quality_assessment: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     embedding_vector: Mapped[list[float] | None] = mapped_column(
         Vector(8) if database_url.startswith("postgresql") else JSON,
         nullable=True,
@@ -97,6 +103,7 @@ async def init_db() -> None:
                 if engine.dialect.name == "postgresql":
                     await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
                 await connection.run_sync(Base.metadata.create_all)
+                await _ensure_claim_document_columns(connection)
             return
         except OperationalError as exc:
             last_error = exc
@@ -114,3 +121,30 @@ async def get_session():
         yield session
     finally:
         await session.close()
+
+
+async def _ensure_claim_document_columns(connection) -> None:
+    column_definitions = [
+        ("normalized_text", "TEXT"),
+        ("textract_blocks", "JSON"),
+        ("validation_results", "JSON"),
+        ("document_classification", "JSON"),
+        ("extracted_fields", "JSON"),
+        ("quality_assessment", "JSON"),
+    ]
+    dialect = connection.dialect.name
+
+    if dialect == "postgresql":
+        for column_name, column_type in column_definitions:
+            await connection.execute(
+                text(f"ALTER TABLE claim_documents ADD COLUMN IF NOT EXISTS {column_name} {column_type}")
+            )
+        return
+
+    if dialect == "sqlite":
+        existing_columns = await connection.execute(text("PRAGMA table_info(claim_documents)"))
+        existing_names = {row[1] for row in existing_columns.fetchall()}
+        for column_name, column_type in column_definitions:
+            if column_name in existing_names:
+                continue
+            await connection.execute(text(f"ALTER TABLE claim_documents ADD COLUMN {column_name} {column_type}"))
