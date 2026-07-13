@@ -12,7 +12,7 @@ from app.observability import traceable
 from app.ocr_service import OCRService
 from app.ocr_queue_service import OcrQueueService
 from app.s3_service import S3Service
-from app.schemas import (
+from app.schemas.schemas import (
     ClaimCreateRequest,
     ClaimDocumentResponse,
     ClaimResponse,
