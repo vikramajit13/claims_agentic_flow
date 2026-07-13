@@ -8,5 +8,6 @@ pgvector
 boto3
 httpx
 pytest
+langgraph
 langsmith
 python-dotenv

@@ -7,10 +7,8 @@ from app.graph.manager import (
     build_claim_graph,
 )
 from app.graph.runtime import ClaimGraphRuntime, GraphRuntimeConfig
-from app.graph.state import ClaimGraphState
 
 __all__ = [
-    "ClaimGraphState",
     "ClaimGraphRuntime",
     "ClaimReviewGraphBuilder",
     "GraphDefinition",
