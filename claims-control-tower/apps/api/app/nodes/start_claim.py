@@ -2,6 +2,7 @@ from app.claim_service import ClaimService
 from app.graph.state import ClaimGraphState
 
 
+
 async def process_claim(state: ClaimGraphState) -> dict:
     claim_service = ClaimService()
     claim = await claim_service.get_claim(state.claim_id)
