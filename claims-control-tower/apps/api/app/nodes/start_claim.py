@@ -1,5 +1,6 @@
 from app.claim_service import ClaimService
 from app.graph.state import ClaimGraphState
+from app.mappers.document_mapper import map_claim_documents_response
 
 
 
@@ -18,5 +19,6 @@ async def process_claim(state: ClaimGraphState) -> dict:
         "claim_amount": claim.claim_amount,
         "claim_type": claim.claim_type,
         "execution_plan": ["graph_bootstrap", "validate_claim_context"],
+        "claim_documents": map_claim_documents_response(claim.documents),
         "notes": [*state.notes, "Claim loaded into graph state"],
     }
