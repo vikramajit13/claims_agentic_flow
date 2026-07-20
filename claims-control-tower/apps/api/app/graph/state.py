@@ -19,8 +19,12 @@ class ClaimGraphState(BaseModel):
     claim_status: str = "draft"
     claim_amount: float | None = None
     claim_type: str | None = None
+    incident_date: str | None = None
     workflow_state: ClaimWorkflowState | None = None
     claim_description: str | None = None
+    risk_score: int = 0
+    risk_level: str = "LOW"
+    risk_factors: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     current_step: str = "graph_bootstrap"
     execution_plan: list[str] = Field(default_factory=list)

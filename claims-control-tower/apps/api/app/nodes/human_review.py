@@ -9,5 +9,5 @@ async def human_in_the_loop_review(state: ClaimGraphState) -> dict:
         "requires_human_review": True,
         "hitl_required": True,
         "notes": notes,
-        "completed_steps": [*state.completed_steps, "process_claim", "validate_claim_context", "human_review"],
+        "completed_steps": [*state.completed_steps, "process_claim", "validate_claim_context", "analyse_risk", "human_review"],
     }

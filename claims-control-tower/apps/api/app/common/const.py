@@ -1,7 +1,12 @@
-from app.enum.enums import ClaimType
+from __future__ import annotations
 
-document_required={
-    ClaimType.AUTO: ["invoice", "police_report"],
-    ClaimType.HOME: ["invoice", "police_report", "damage_report"],
-    ClaimType.HEALTH: ["invoice", "medical_report"],
+CLAIM_TYPE_DOCUMENT_REQUIREMENTS = {
+    "auto": ["photo", "repair_estimate"],
+    "motor": ["photo", "repair_estimate"],
+    "home": ["invoice", "damage_report"],
+    "property": ["invoice", "damage_report"],
+    "health": ["invoice", "medical_report"],
+    "medical": ["invoice", "medical_report"],
+    "travel": ["invoice"],
+    "theft": ["police_report"],
 }

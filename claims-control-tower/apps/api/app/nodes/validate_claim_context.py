@@ -1,76 +1,43 @@
-from app.graph.state import ClaimGraphState
-from app.enum.enums import ClaimType
-from app.common.const import document_required
+from __future__ import annotations
 
-# Confirm the required doc set for the claim type
-# Verify each required document exists in state
-# Check OCR/normalization completed successfully
-# Validate invoice metadata like invoice date, amount, vendor, and currency
-# Validate image metadata like file type, readability, and confidence
-# Compare document dates against incident date
-# Compare claim amount against invoice amount and policy limits if already loaded
-# Mark gaps or contradictions as REQUEST_MORE_INFO or HUMAN_REVIEW
+from app.common.const import CLAIM_TYPE_DOCUMENT_REQUIREMENTS
+from app.common.utils import normalize_claim_type
+from app.graph.state import ClaimGraphState
 
 
 async def validate_claim_context(state: ClaimGraphState) -> dict:
     notes = list(state.notes)
     errors = list(state.errors)
-    requires_human_review = bool(state.hitl_required)
-    # check if documents are present as per claim_type requirements
-
-    claim_type: ClaimType | None = (
-        ClaimType(state.claim_type) if state.claim_type else None
-    )
-    docs_required = document_required.get(claim_type, []) if claim_type else []
-
-    for document in state.claim_documents:
-        normalized_document_type = (
+    claim_type = normalize_claim_type(state.claim_type)
+    required_documents = CLAIM_TYPE_DOCUMENT_REQUIREMENTS.get(claim_type, [])
+    observed_documents = [
+        str(
             document.normalized_document_type
             or (document.normalized_payload or {}).get("document_type")
             or document.document_type
-        )
-        normalized_document_type = str(normalized_document_type).lower()
-
-        if docs_required and normalized_document_type not in docs_required:
-            errors.append(f"unexpected_document:{document.document_id}")
-            requires_human_review = True
-
-        if str(document.ocr_status).lower() == "failed":
-            errors.append(f"document_ocr_failed:{document.document_id}")
-            requires_human_review = True
-
-        if (
-            str(document.status).lower() == "ocr_completed"
-            and not document.document_text
-        ):
-            errors.append(f"missing_document_text:{document.document_id}")
-            requires_human_review = True
-
-        if str(document.status).lower() == "ocr_completed" and not document.normalized_payload:
-            errors.append(f"missing_normalized_payload:{document.document_id}")
-            requires_human_review = True
-
-        quality_assessment = document.quality_assessment or {}
-        if isinstance(quality_assessment, dict) and quality_assessment.get("review_recommended"):
-            errors.append(f"low_quality_document:{document.document_id}")
-            requires_human_review = True
+        ).lower()
+        for document in state.claim_documents
+    ]
 
     if not state.claim_description:
         errors.append("missing_claim_description")
-        requires_human_review = True
 
     if state.claim_amount is None:
         errors.append("missing_claim_amount")
-        requires_human_review = True
 
-    if requires_human_review:
-        notes.append("Claim context requires human review before graph continuation.")
+    if not state.claim_documents:
+        errors.append("missing_claim_documents")
+
+    if errors:
+        notes.append("Claim context is incomplete; graph should stop before risk analysis.")
         return {
-            "current_step": "human_review",
+            "current_step": "context_invalid",
             "requires_human_review": True,
             "hitl_required": True,
             "errors": errors,
             "notes": notes,
+            "required_documents": required_documents,
+            "observed_documents": observed_documents,
             "completed_steps": [
                 *state.completed_steps,
                 "process_claim",
@@ -85,6 +52,8 @@ async def validate_claim_context(state: ClaimGraphState) -> dict:
         "hitl_required": False,
         "errors": errors,
         "notes": notes,
+        "required_documents": required_documents,
+        "observed_documents": observed_documents,
         "completed_steps": [
             *state.completed_steps,
             "process_claim",
