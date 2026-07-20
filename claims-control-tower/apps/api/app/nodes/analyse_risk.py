@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from app.domain.risk import RiskRegistry, RiskResult, RiskRule
 from app.common.const import CLAIM_TYPE_DOCUMENT_REQUIREMENTS
 from app.common.utils import normalize_claim_type
 from app.enums import RiskLevel
-from app.risk import RiskRegistry, RiskResult, RiskRule
 from app.graph.state import ClaimGraphState
 
 
