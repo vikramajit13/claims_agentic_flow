@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 from app.common.const import CLAIM_TYPE_DOCUMENT_REQUIREMENTS
 from app.common.utils import normalize_claim_type
+from app.enums import RiskLevel
+from app.risk import RiskRegistry, RiskResult, RiskRule
 from app.graph.state import ClaimGraphState
 
 
-def _document_type(document) -> str:
+def _document_type(document: Any) -> str:
     return str(
         document.normalized_document_type
         or (document.normalized_payload or {}).get("document_type")
@@ -15,7 +18,7 @@ def _document_type(document) -> str:
     ).lower()
 
 
-def _extract_invoice_fields(document) -> dict:
+def _extract_invoice_fields(document: Any) -> dict[str, Any]:
     normalized_payload = document.normalized_payload or {}
     if isinstance(normalized_payload, dict):
         extracted_fields = normalized_payload.get("extracted_fields")
@@ -25,142 +28,214 @@ def _extract_invoice_fields(document) -> dict:
     return extracted_fields if isinstance(extracted_fields, dict) else {}
 
 
-async def analyse_risk(state: ClaimGraphState) -> dict:
-    notes = list(state.notes)
-    errors = list(state.errors)
-    required_documents = CLAIM_TYPE_DOCUMENT_REQUIREMENTS.get(normalize_claim_type(state.claim_type), [])
-    observed_documents: list[str] = []
-    seen_document_types: set[str] = set()
-    risk_factors: list[str] = []
-    risk_score = 0
-
-    def add_risk(points: int, factor: str, error: str | None = None) -> None:
-        nonlocal risk_score
-        risk_score += points
-        risk_factors.append(factor)
-        if error:
-            errors.append(error)
-
-    for document in state.claim_documents:
-        normalized_document_type = _document_type(document)
-        observed_documents.append(normalized_document_type)
-        seen_document_types.add(normalized_document_type)
-
-        if str(document.ocr_status).lower() == "failed":
-            add_risk(35, f"OCR failed for document {document.document_id}", f"document_ocr_failed:{document.document_id}")
-
-        if str(document.status).lower() == "ocr_completed" and not document.document_text:
-            add_risk(
-                25,
-                f"Missing extracted text for document {document.document_id}",
-                f"missing_document_text:{document.document_id}",
-            )
-
-        if str(document.status).lower() == "ocr_completed" and not document.normalized_payload:
-            add_risk(
-                20,
-                f"Missing normalized payload for document {document.document_id}",
-                f"missing_normalized_payload:{document.document_id}",
-            )
-
-        quality_assessment = document.quality_assessment or {}
-        if isinstance(quality_assessment, dict) and quality_assessment.get("review_recommended"):
-            add_risk(
-                15,
-                f"Document quality review recommended for {document.document_id}",
-                f"low_quality_document:{document.document_id}",
-            )
-
-        normalized_confidence = document.normalized_confidence
-        if normalized_confidence is not None and normalized_confidence < 0.7:
-            add_risk(
-                15,
-                f"Low normalized confidence for document {document.document_id}",
-                f"low_confidence_document:{document.document_id}",
-            )
-
-        if normalized_document_type == "invoice":
-            extracted_fields = _extract_invoice_fields(document)
-            invoice_amount = extracted_fields.get("invoice_amount")
-            vendor_name = extracted_fields.get("vendor_name") or extracted_fields.get("repairer_name")
-            currency = extracted_fields.get("currency")
-            invoice_date = extracted_fields.get("invoice_date")
-
-            if invoice_amount in (None, "", 0):
-                add_risk(
-                    20,
-                    f"Missing invoice amount for document {document.document_id}",
-                    f"missing_invoice_amount:{document.document_id}",
+class MetadataRiskRule:
+    def evaluate(self, state: ClaimGraphState, registry: RiskRegistry) -> None:
+        if not state.claim_documents:
+            registry.register(
+                RiskResult(
+                    30,
+                    "No claim documents were loaded for risk analysis",
+                    "missing_claim_documents",
                 )
-            if not vendor_name:
-                add_risk(
-                    15,
-                    f"Missing invoice vendor for document {document.document_id}",
-                    f"missing_invoice_vendor:{document.document_id}",
+            )
+        if not state.claim_description:
+            registry.register(
+                RiskResult(10, "Claim description is missing", "missing_claim_description")
+            )
+        if state.claim_amount is None:
+            registry.register(RiskResult(10, "Claim amount is missing", "missing_claim_amount"))
+
+
+class DocumentCompletenessRule:
+    def evaluate(self, state: ClaimGraphState, registry: RiskRegistry) -> None:
+        required_docs = CLAIM_TYPE_DOCUMENT_REQUIREMENTS.get(normalize_claim_type(state.claim_type), [])
+        seen_docs = {_document_type(doc) for doc in state.claim_documents}
+
+        for required_doc in required_docs:
+            if required_doc not in seen_docs:
+                registry.register(
+                    RiskResult(
+                        20,
+                        f"Missing required document: {required_doc}",
+                        f"missing_required_document:{required_doc}",
+                    )
                 )
-            if not currency:
-                notes.append(f"invoice_currency_missing:{document.document_id}")
-            if state.incident_date and invoice_date:
-                try:
-                    incident = date.fromisoformat(state.incident_date)
-                    invoice = date.fromisoformat(str(invoice_date))
-                    if invoice > incident:
-                        add_risk(
-                            35,
-                            f"Invoice date {invoice_date} is after incident date {state.incident_date}",
-                            f"invoice_after_incident:{document.document_id}",
+
+
+class DocumentProcessingRule:
+    def evaluate(self, state: ClaimGraphState, registry: RiskRegistry) -> None:
+        for document in state.claim_documents:
+            document_id = document.document_id
+            status = str(document.status).lower()
+
+            if str(document.ocr_status).lower() == "failed":
+                registry.register(
+                    RiskResult(
+                        35,
+                        f"OCR failed for document {document_id}",
+                        f"document_ocr_failed:{document_id}",
+                    )
+                )
+
+            if status == "ocr_completed":
+                if not document.document_text:
+                    registry.register(
+                        RiskResult(
+                            25,
+                            f"Missing extracted text for document {document_id}",
+                            f"missing_document_text:{document_id}",
                         )
-                except ValueError:
-                    add_risk(
-                        30,
-                        f"Invalid invoice or incident date on document {document.document_id}",
-                        f"invalid_invoice_or_incident_date:{document.document_id}",
+                    )
+                if not document.normalized_payload:
+                    registry.register(
+                        RiskResult(
+                            20,
+                            f"Missing normalized payload for document {document_id}",
+                            f"missing_normalized_payload:{document_id}",
+                        )
                     )
 
-    for required_document in required_documents:
-        if required_document not in seen_document_types:
-            add_risk(
-                20,
-                f"Missing required document: {required_document}",
-                f"missing_required_document:{required_document}",
+            quality = document.quality_assessment or {}
+            if isinstance(quality, dict) and quality.get("review_recommended"):
+                registry.register(
+                    RiskResult(
+                        15,
+                        f"Document quality review recommended for {document_id}",
+                        f"low_quality_document:{document_id}",
+                    )
+                )
+
+            if document.normalized_confidence is not None and document.normalized_confidence < 0.7:
+                registry.register(
+                    RiskResult(
+                        15,
+                        f"Low normalized confidence for document {document_id}",
+                        f"low_confidence_document:{document_id}",
+                    )
+                )
+
+
+class InvoiceDeepAnalysisRule:
+    def evaluate(self, state: ClaimGraphState, registry: RiskRegistry) -> None:
+        for document in state.claim_documents:
+            if _document_type(document) != "invoice":
+                continue
+
+            fields = _extract_invoice_fields(document)
+            vendor_name = fields.get("vendor_name") or fields.get("repairer_name")
+            invoice_date = fields.get("invoice_date")
+
+            if fields.get("invoice_amount") in (None, "", 0):
+                registry.register(
+                    RiskResult(
+                        20,
+                        f"Missing invoice amount for document {document.document_id}",
+                        f"missing_invoice_amount:{document.document_id}",
+                    )
+                )
+            if not vendor_name:
+                registry.register(
+                    RiskResult(
+                        15,
+                        f"Missing invoice vendor for document {document.document_id}",
+                        f"missing_invoice_vendor:{document.document_id}",
+                    )
+                )
+            if not fields.get("currency"):
+                registry.notes.append(f"invoice_currency_missing:{document.document_id}")
+
+            self._validate_dates(state, document, invoice_date, registry)
+
+    def _validate_dates(
+        self,
+        state: ClaimGraphState,
+        document: Any,
+        invoice_date: Any,
+        registry: RiskRegistry,
+    ) -> None:
+        if not (state.incident_date and invoice_date):
+            return
+
+        try:
+            incident = date.fromisoformat(state.incident_date)
+            invoice = date.fromisoformat(str(invoice_date))
+        except ValueError:
+            registry.register(
+                RiskResult(
+                    30,
+                    f"Invalid invoice or incident date on document {document.document_id}",
+                    f"invalid_invoice_or_incident_date:{document.document_id}",
+                )
+            )
+            return
+
+        if invoice > incident:
+            registry.register(
+                RiskResult(
+                    35,
+                    f"Invoice date {invoice_date} is after incident date {state.incident_date}",
+                    f"invoice_after_incident:{document.document_id}",
+                )
             )
 
-    if not state.claim_documents:
-        add_risk(30, "No claim documents were loaded for risk analysis", "missing_claim_documents")
 
-    if not state.claim_description:
-        add_risk(10, "Claim description is missing", "missing_claim_description")
+class RiskAnalysisEngine:
+    def __init__(self, rules: list[RiskRule] | None = None) -> None:
+        self._rules = rules or [
+            MetadataRiskRule(),
+            DocumentCompletenessRule(),
+            DocumentProcessingRule(),
+            InvoiceDeepAnalysisRule(),
+        ]
 
-    if state.claim_amount is None:
-        add_risk(10, "Claim amount is missing", "missing_claim_amount")
+    @staticmethod
+    def _determine_risk_level(score: int) -> RiskLevel:
+        if score >= 70:
+            return RiskLevel.HIGH
+        if score >= 40:
+            return RiskLevel.MEDIUM
+        return RiskLevel.LOW
 
-    risk_level = "LOW"
-    if risk_score >= 70:
-        risk_level = "HIGH"
-    elif risk_score >= 40:
-        risk_level = "MEDIUM"
+    def execute(self, state: ClaimGraphState) -> dict[str, Any]:
+        registry = RiskRegistry(
+            errors=list(state.errors),
+            notes=list(state.notes),
+        )
 
-    requires_human_review = bool(state.hitl_required or risk_level == "HIGH" or errors)
-    if requires_human_review:
-        notes.append("Risk analysis recommends human review before payment routing.")
-    else:
-        notes.append("Risk analysis completed without review blockers.")
+        for rule in self._rules:
+            rule.evaluate(state, registry)
 
-    return {
-        "current_step": "risk_analysis",
-        "risk_score": min(risk_score, 100),
-        "risk_level": risk_level,
-        "risk_factors": risk_factors,
-        "requires_human_review": requires_human_review,
-        "hitl_required": requires_human_review,
-        "errors": errors,
-        "notes": notes,
-        "required_documents": required_documents,
-        "observed_documents": observed_documents,
-        "completed_steps": [
-            *state.completed_steps,
-            "process_claim",
-            "validate_claim_context",
-            "analyse_risk",
-        ],
-    }
+        risk_level = self._determine_risk_level(registry.risk_score)
+        requires_review = bool(state.hitl_required or risk_level == RiskLevel.HIGH or registry.errors)
+
+        registry.notes.append(
+            "Risk analysis recommends human review before payment routing."
+            if requires_review
+            else "Risk analysis completed without review blockers."
+        )
+
+        required_documents = CLAIM_TYPE_DOCUMENT_REQUIREMENTS.get(normalize_claim_type(state.claim_type), [])
+        observed_documents = [_document_type(document) for document in state.claim_documents]
+
+        return {
+            "current_step": "risk_analysis",
+            "risk_score": min(registry.risk_score, 100),
+            "risk_level": risk_level.value,
+            "risk_factors": registry.risk_factors,
+            "requires_human_review": requires_review,
+            "hitl_required": requires_review,
+            "errors": registry.errors,
+            "notes": registry.notes,
+            "required_documents": required_documents,
+            "observed_documents": observed_documents,
+            "completed_steps": [
+                *state.completed_steps,
+                "process_claim",
+                "validate_claim_context",
+                "analyse_risk",
+            ],
+        }
+
+
+async def analyse_risk(state: ClaimGraphState) -> dict[str, Any]:
+    return RiskAnalysisEngine().execute(state)

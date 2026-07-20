@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from app.config import settings
 from app.graph.builder import ClaimReviewGraphBuilder
-from app.graph.checkpoints import MemoryCheckpointStore, NoCheckpointStore
+from app.graph.checkpoints import DatabaseCheckpointStore, MemoryCheckpointStore, NoCheckpointStore
 from app.graph.runtime import ClaimGraphRuntime, GraphRuntimeConfig
 
 
@@ -12,7 +13,7 @@ class GraphStateManagerConfig:
     graph_name: str = "claim_review_graph"
     graph_version: str = "v1"
     debug: bool = False
-    checkpoint_backend: str = "memory"
+    checkpoint_backend: str = settings.graph_checkpoint_backend
     interrupt_before: tuple[str, ...] = field(default_factory=lambda: ("human_review",))
     interrupt_after: tuple[str, ...] = field(default_factory=tuple)
 
@@ -22,7 +23,7 @@ class GraphStateManagerFactoryConfig:
     graph_name: str = "claim_review_graph"
     graph_version: str = "v1"
     debug: bool = False
-    checkpoint_backend: str = "memory"
+    checkpoint_backend: str = settings.graph_checkpoint_backend
     interrupt_before: tuple[str, ...] = field(default_factory=lambda: ("human_review",))
     interrupt_after: tuple[str, ...] = field(default_factory=tuple)
 
@@ -45,6 +46,8 @@ class GraphStateManager:
 
     @staticmethod
     def _build_checkpoint_store(backend: str):
+        if backend in {"database", "persistent"}:
+            return DatabaseCheckpointStore()
         if backend == "memory":
             return MemoryCheckpointStore()
         if backend == "none":

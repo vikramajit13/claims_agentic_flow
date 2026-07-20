@@ -1,4 +1,5 @@
 from enum import StrEnum
+from enum import Enum
 
 
 class ClaimStatus(StrEnum):
@@ -36,3 +37,9 @@ class WorkflowStep(StrEnum):
     OCR_ENRICHMENT = "ocr_enrichment"
     GRAPH_BOOTSTRAP = "graph_bootstrap"
     HUMAN_REVIEW = "human_review"
+
+
+class RiskLevel(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"

@@ -9,6 +9,8 @@ from sqlalchemy import JSON, DateTime, Float, Integer, String, Text, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
@@ -26,14 +28,27 @@ def _build_async_database_url(raw_url: str) -> str:
     return raw_url
 
 
+def _build_sync_database_url(raw_url: str) -> str:
+    if raw_url.startswith("sqlite+aiosqlite"):
+        return raw_url.replace("sqlite+aiosqlite", "sqlite+pysqlite", 1)
+    return raw_url
+
+
 database_url = _build_async_database_url(settings.database_url)
+sync_database_url = _build_sync_database_url(settings.database_url)
 engine_kwargs = {"future": True}
 if database_url.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
     engine_kwargs["poolclass"] = StaticPool
+sync_engine_kwargs = {"future": True}
+if sync_database_url.startswith("sqlite"):
+    sync_engine_kwargs["connect_args"] = {"check_same_thread": False}
+    sync_engine_kwargs["poolclass"] = StaticPool
 
 engine = create_async_engine(database_url, **engine_kwargs)
+sync_engine = create_engine(sync_database_url, **sync_engine_kwargs)
 SessionLocal = async_sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, class_=AsyncSession)
+SyncSessionLocal = sessionmaker(bind=sync_engine, autoflush=False, expire_on_commit=False)
 
 
 class ClaimRecord(Base):
@@ -99,6 +114,37 @@ class WorkflowRunRecord(Base):
     updated_at: Mapped[str] = mapped_column(DateTime(timezone=True))
 
 
+class GraphCheckpointRecord(Base):
+    __tablename__ = "graph_checkpoints"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    thread_id: Mapped[str] = mapped_column(String(255), index=True)
+    checkpoint_ns: Mapped[str] = mapped_column(String(255), default="", index=True)
+    checkpoint_id: Mapped[str] = mapped_column(String(255), index=True)
+    parent_checkpoint_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    checkpoint: Mapped[dict] = mapped_column(JSON)
+    checkpoint_metadata: Mapped[dict] = mapped_column(JSON)
+    pending_writes: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class GraphCheckpointWriteRecord(Base):
+    __tablename__ = "graph_checkpoint_writes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    thread_id: Mapped[str] = mapped_column(String(255), index=True)
+    checkpoint_ns: Mapped[str] = mapped_column(String(255), default="", index=True)
+    checkpoint_id: Mapped[str] = mapped_column(String(255), index=True)
+    task_id: Mapped[str] = mapped_column(String(255), index=True)
+    task_path: Mapped[str] = mapped_column(String(255), default="")
+    write_idx: Mapped[int] = mapped_column(Integer)
+    channel: Mapped[str] = mapped_column(String(255), index=True)
+    value: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 async def init_db() -> None:
     attempts = 10 if engine.dialect.name == "postgresql" else 1
     last_error = None
@@ -157,3 +203,7 @@ async def _ensure_claim_document_columns(connection) -> None:
             if column_name in existing_names:
                 continue
             await connection.execute(text(f"ALTER TABLE claim_documents ADD COLUMN {column_name} {column_type}"))
+
+
+def _ensure_sync_tables() -> None:
+    Base.metadata.create_all(bind=sync_engine)
