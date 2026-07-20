@@ -63,3 +63,11 @@ class ClaimDocumentState(BaseModel):
     document_text: str | None = None
     ocr_status: str | None = None
     ocr_error: str | None = None
+    validation_results: dict | None = None
+    document_classification: dict | None = None
+    extracted_fields: dict | None = None
+    quality_assessment: dict | None = None
+    normalized_payload: dict | None = None
+    normalized_document_type: str | None = None
+    normalized_confidence: float | None = None
+    normalized_at: str | None = None

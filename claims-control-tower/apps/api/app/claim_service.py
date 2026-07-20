@@ -153,6 +153,18 @@ class ClaimService:
                         file_name=document.file_name,
                         textract_result=textract_result,
                     )
+                    normalized_record = self.document_intelligence_service.build_normalized_record(
+                        document_id=document.id,
+                        claim_id=claim_id,
+                        file_name=document.file_name,
+                        content_type=document.content_type,
+                        s3_uri=document.s3_uri,
+                        s3_bucket=document.s3_bucket,
+                        s3_key=document.s3_key,
+                        upload_status=DocumentStatus.OCR_COMPLETED.value,
+                        ocr_status=ocr_status.value,
+                        intelligence_result=intelligence_result,
+                    )
                     document.ocr_status = ocr_status.value
                     document.ocr_text = intelligence_result.raw_text
                     document.normalized_text = intelligence_result.normalized_text
@@ -161,6 +173,10 @@ class ClaimService:
                     document.document_classification = intelligence_result.document_classification
                     document.extracted_fields = intelligence_result.extracted_fields
                     document.quality_assessment = intelligence_result.quality_assessment
+                    document.normalized_payload = normalized_record.model_dump(mode="json")
+                    document.normalized_document_type = normalized_record.document_type
+                    document.normalized_confidence = normalized_record.confidence_score
+                    document.normalized_at = normalized_record.normalized_at
                     document.embedding_vector = self.vector_service.embed_text(intelligence_result.normalized_text)
                     document.upload_status = DocumentStatus.OCR_COMPLETED.value
                     document.ocr_job_id = None
@@ -231,6 +247,10 @@ class ClaimService:
             document_classification=document.document_classification,
             extracted_fields=document.extracted_fields,
             quality_assessment=document.quality_assessment,
+            normalized_payload=document.normalized_payload,
+            normalized_document_type=document.normalized_document_type,
+            normalized_confidence=document.normalized_confidence,
+            normalized_at=document.normalized_at.isoformat() if document.normalized_at else None,
             created_at=document.created_at.isoformat(),
             updated_at=document.updated_at.isoformat(),
         )

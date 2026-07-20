@@ -24,7 +24,14 @@ async def validate_claim_context(state: ClaimGraphState) -> dict:
     docs_required = document_required.get(claim_type, []) if claim_type else []
 
     for document in state.claim_documents:
-        if docs_required and document.document_type not in docs_required:
+        normalized_document_type = (
+            document.normalized_document_type
+            or (document.normalized_payload or {}).get("document_type")
+            or document.document_type
+        )
+        normalized_document_type = str(normalized_document_type).lower()
+
+        if docs_required and normalized_document_type not in docs_required:
             errors.append(f"unexpected_document:{document.document_id}")
             requires_human_review = True
 
@@ -37,6 +44,15 @@ async def validate_claim_context(state: ClaimGraphState) -> dict:
             and not document.document_text
         ):
             errors.append(f"missing_document_text:{document.document_id}")
+            requires_human_review = True
+
+        if str(document.status).lower() == "ocr_completed" and not document.normalized_payload:
+            errors.append(f"missing_normalized_payload:{document.document_id}")
+            requires_human_review = True
+
+        quality_assessment = document.quality_assessment or {}
+        if isinstance(quality_assessment, dict) and quality_assessment.get("review_recommended"):
+            errors.append(f"low_quality_document:{document.document_id}")
             requires_human_review = True
 
     if not state.claim_description:

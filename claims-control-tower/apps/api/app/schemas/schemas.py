@@ -53,6 +53,10 @@ class ClaimDocumentResponse(BaseModel):
     document_classification: dict | None = None
     extracted_fields: dict | None = None
     quality_assessment: dict | None = None
+    normalized_payload: dict | None = None
+    normalized_document_type: str | None = None
+    normalized_confidence: float | None = None
+    normalized_at: str | None = None
     created_at: str
     updated_at: str
 

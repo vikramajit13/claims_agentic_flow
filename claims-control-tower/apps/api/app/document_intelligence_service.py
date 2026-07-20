@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from dataclasses import dataclass
 
 from pydantic import BaseModel, Field, ValidationError
@@ -9,6 +10,12 @@ from app.config import settings
 from app.llm_client import LLMClient
 from app.observability import traceable
 from app.prompt_loader import load_prompt_artifact, render_prompt_template
+from app.schemas.document import (
+    DocumentClassificationResult,
+    DocumentExtractedFields,
+    DocumentQualityAssessment,
+    NormalizedDocumentRecord,
+)
 
 
 @dataclass(frozen=True)
@@ -304,3 +311,61 @@ class DocumentIntelligenceOrchestrator:
                 validation_results=validation_results,
                 fallback_reason=str(exc),
             )
+
+    def build_normalized_record(
+        self,
+        *,
+        document_id: int,
+        claim_id: int,
+        file_name: str,
+        content_type: str | None,
+        s3_uri: str,
+        s3_bucket: str,
+        s3_key: str,
+        upload_status: str,
+        ocr_status: str,
+        intelligence_result: DocumentIntelligenceResult,
+    ) -> NormalizedDocumentRecord:
+        classification = DocumentClassificationResult.model_validate(intelligence_result.document_classification)
+        extracted_fields_payload = intelligence_result.extracted_fields.get("fields") or intelligence_result.extracted_fields
+        extracted_fields = DocumentExtractedFields.model_validate(extracted_fields_payload)
+        raw_quality = dict(intelligence_result.quality_assessment)
+        raw_confidence = float(raw_quality.get("overall_confidence", raw_quality.get("average_confidence", 0.0)))
+        if raw_confidence > 1:
+            raw_confidence = round(raw_confidence / 100, 4)
+        quality_payload = {
+            "quality_level": raw_quality.get("quality_level", "unknown"),
+            "overall_confidence": raw_confidence,
+            "review_recommended": bool(raw_quality.get("review_recommended", False)),
+            "notes": raw_quality.get("notes", []),
+            "processing_mode": raw_quality.get("processing_mode"),
+            "fallback_used": bool(raw_quality.get("fallback_used", False)),
+            "fallback_reason": raw_quality.get("fallback_reason"),
+        }
+        quality_assessment = DocumentQualityAssessment.model_validate(quality_payload)
+        confidence = quality_assessment.overall_confidence
+
+        return NormalizedDocumentRecord(
+            document_id=document_id,
+            claim_id=claim_id,
+            file_name=file_name,
+            content_type=content_type,
+            s3_uri=s3_uri,
+            document_type=classification.document_type,
+            upload_status=upload_status,
+            ocr_status=ocr_status,
+            raw_text=intelligence_result.raw_text,
+            normalized_text=intelligence_result.normalized_text,
+            validation_results=intelligence_result.validation_results,
+            document_classification=classification,
+            extracted_fields=extracted_fields,
+            quality_assessment=quality_assessment,
+            textract_blocks=intelligence_result.textract_blocks,
+            confidence_score=confidence,
+            normalized_at=datetime.now(timezone.utc),
+            metadata={
+                "s3_bucket": s3_bucket,
+                "s3_key": s3_key,
+                "source": "document_intelligence_orchestrator",
+            },
+        )

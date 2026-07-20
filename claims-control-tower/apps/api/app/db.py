@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, DateTime, Float, Integer, String, Text, text
@@ -72,6 +73,10 @@ class ClaimDocumentRecord(Base):
     document_classification: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     extracted_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     quality_assessment: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    normalized_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    normalized_document_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    normalized_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    normalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     embedding_vector: Mapped[list[float] | None] = mapped_column(
         Vector(8) if database_url.startswith("postgresql") else JSON,
         nullable=True,
@@ -131,6 +136,10 @@ async def _ensure_claim_document_columns(connection) -> None:
         ("document_classification", "JSON"),
         ("extracted_fields", "JSON"),
         ("quality_assessment", "JSON"),
+        ("normalized_payload", "JSON"),
+        ("normalized_document_type", "TEXT"),
+        ("normalized_confidence", "FLOAT"),
+        ("normalized_at", "TIMESTAMP"),
     ]
     dialect = connection.dialect.name
 

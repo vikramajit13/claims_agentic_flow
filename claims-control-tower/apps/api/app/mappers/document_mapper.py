@@ -19,6 +19,16 @@ def _enum_value(value: Any, default: str = "") -> str:
 
 
 def _as_document_type(document: Any) -> str:
+    normalized_document_type = _read_value(document, "normalized_document_type")
+    if normalized_document_type:
+        return str(normalized_document_type)
+
+    normalized_payload = _read_value(document, "normalized_payload")
+    if isinstance(normalized_payload, Mapping):
+        payload_type = normalized_payload.get("document_type")
+        if payload_type:
+            return str(payload_type)
+
     document_type = _read_value(document, "document_type")
     if document_type:
         return str(_enum_value(document_type))
@@ -52,6 +62,7 @@ def _as_document_url(document: Any) -> str:
 def map_claim_document_response(document: Any) -> ClaimDocumentState:
     document_text = _read_value(document, "normalized_text") or _read_value(document, "ocr_text")
     uploaded_at = _read_value(document, "created_at") or _read_value(document, "uploaded_at") or ""
+    normalized_payload = _read_value(document, "normalized_payload")
 
     return ClaimDocumentState(
         document_id=int(_read_value(document, "id") or _read_value(document, "document_id")),
@@ -62,6 +73,14 @@ def map_claim_document_response(document: Any) -> ClaimDocumentState:
         document_text=document_text,
         ocr_status=str(_enum_value(_read_value(document, "ocr_status"), default="unknown")),
         ocr_error=_read_value(document, "ocr_error"),
+        validation_results=_read_value(document, "validation_results"),
+        document_classification=_read_value(document, "document_classification"),
+        extracted_fields=_read_value(document, "extracted_fields"),
+        quality_assessment=_read_value(document, "quality_assessment"),
+        normalized_payload=normalized_payload,
+        normalized_document_type=_read_value(document, "normalized_document_type"),
+        normalized_confidence=_read_value(document, "normalized_confidence"),
+        normalized_at=str(_read_value(document, "normalized_at")) if _read_value(document, "normalized_at") else None,
     )
 
 
