@@ -7,6 +7,7 @@ from langgraph.graph import END, START, StateGraph
 from app.graph.state import ClaimGraphState
 from app.nodes.analyse_risk import analyse_risk
 from app.nodes.human_review import human_in_the_loop_review
+from app.nodes.post_human_review import post_human_review
 from app.nodes.start_claim import process_claim
 from app.nodes.validate_claim_context import validate_claim_context
 
@@ -25,6 +26,7 @@ class ClaimReviewGraphBuilder:
         workflow.add_node("validate_claim_context", validate_claim_context)
         workflow.add_node("analyse_risk", analyse_risk)
         workflow.add_node("human_review", human_in_the_loop_review)
+        workflow.add_node("post_human_review", post_human_review)
 
         workflow.add_edge(START, "process_claim")
         workflow.add_edge("process_claim", "validate_claim_context")
@@ -44,7 +46,7 @@ class ClaimReviewGraphBuilder:
                 "complete": END,
             },
         )
-        workflow.add_edge("human_review", END)
+        workflow.add_edge("post_human_review", END)
         return workflow
 
     @staticmethod

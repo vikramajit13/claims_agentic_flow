@@ -14,7 +14,7 @@ class GraphStateManagerConfig:
     graph_version: str = "v1"
     debug: bool = False
     checkpoint_backend: str = settings.graph_checkpoint_backend
-    interrupt_before: tuple[str, ...] = field(default_factory=lambda: ("human_review",))
+    interrupt_before: tuple[str, ...] = field(default_factory=tuple)
     interrupt_after: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -24,7 +24,7 @@ class GraphStateManagerFactoryConfig:
     graph_version: str = "v1"
     debug: bool = False
     checkpoint_backend: str = settings.graph_checkpoint_backend
-    interrupt_before: tuple[str, ...] = field(default_factory=lambda: ("human_review",))
+    interrupt_before: tuple[str, ...] = field(default_factory=tuple)
     interrupt_after: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -59,6 +59,9 @@ class GraphStateManager:
 
     def invoke(self, initial_state, *, thread_id: str | None = None):
         return self.runtime.invoke(initial_state, thread_id=thread_id)
+
+    async def ainvoke(self, initial_state, *, thread_id: str | None = None):
+        return await self.runtime.ainvoke(initial_state, thread_id=thread_id)
 
 
 class GraphStateManagerFactory:

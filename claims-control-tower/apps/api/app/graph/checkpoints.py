@@ -17,6 +17,12 @@ from langgraph.checkpoint.base import (
 )
 from langgraph.checkpoint.memory import MemorySaver
 
+ALLOWLISTED_CHECKPOINT_TYPES = {
+    ("app.graph.state", "ClaimGraphState"),
+    ("app.schemas.document", "ClaimDocumentState"),
+    ("app.schemas.workflow", "ClaimWorkflowState"),
+}
+
 
 class CheckpointStore(Protocol):
     def build(self):
@@ -415,13 +421,13 @@ class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):
 @dataclass(frozen=True)
 class MemoryCheckpointStore:
     def build(self):
-        return MemorySaver()
+        return MemorySaver().with_allowlist(ALLOWLISTED_CHECKPOINT_TYPES)
 
 
 @dataclass(frozen=True)
 class DatabaseCheckpointStore:
     def build(self):
-        return DatabaseCheckpointSaver()
+        return DatabaseCheckpointSaver().with_allowlist(ALLOWLISTED_CHECKPOINT_TYPES)
 
 
 @dataclass(frozen=True)

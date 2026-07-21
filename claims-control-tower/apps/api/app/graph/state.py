@@ -25,6 +25,10 @@ class ClaimGraphState(BaseModel):
     risk_score: int = 0
     risk_level: str = "LOW"
     risk_factors: list[str] = Field(default_factory=list)
+    human_review_request: dict | None = None
+    human_review_response: dict | None = None
+    human_review_decision: str | None = None
+    human_review_notes: str | None = None
     errors: list[str] = Field(default_factory=list)
     current_step: str = "graph_bootstrap"
     execution_plan: list[str] = Field(default_factory=list)

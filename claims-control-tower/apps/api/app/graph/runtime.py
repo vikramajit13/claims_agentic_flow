@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
@@ -38,6 +39,13 @@ class ClaimGraphRuntime:
         return workflow.compile(**compile_kwargs)
 
     def invoke(self, initial_state: ClaimGraphState | dict[str, Any], *, thread_id: str | None = None) -> Any:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self.ainvoke(initial_state, thread_id=thread_id))
+        raise RuntimeError("ClaimGraphRuntime.invoke() cannot be used from an async context; use ainvoke() instead.")
+
+    async def ainvoke(self, initial_state: ClaimGraphState | dict[str, Any], *, thread_id: str | None = None) -> Any:
         derived_thread_id = thread_id
         if derived_thread_id is None:
             if isinstance(initial_state, dict):
@@ -63,7 +71,7 @@ class ClaimGraphRuntime:
                 }
             )
 
-        return self.compiled().invoke(
+        return await self.compiled().ainvoke(
             graph_input,
             config={"configurable": {"thread_id": derived_thread_id}},
         )
