@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.config import settings
 from app.graph.builder import ClaimReviewGraphBuilder
-from app.graph.checkpoints import DatabaseCheckpointStore, MemoryCheckpointStore, NoCheckpointStore
+from app.graph.checkpoints import PostgresCheckpointStore
 from app.graph.runtime import ClaimGraphRuntime, GraphRuntimeConfig
 
 
@@ -13,7 +12,7 @@ class GraphStateManagerConfig:
     graph_name: str = "claim_review_graph"
     graph_version: str = "v1"
     debug: bool = False
-    checkpoint_backend: str = settings.graph_checkpoint_backend
+    checkpoint_backend: str = "postgres"
     interrupt_before: tuple[str, ...] = field(default_factory=tuple)
     interrupt_after: tuple[str, ...] = field(default_factory=tuple)
 
@@ -23,7 +22,7 @@ class GraphStateManagerFactoryConfig:
     graph_name: str = "claim_review_graph"
     graph_version: str = "v1"
     debug: bool = False
-    checkpoint_backend: str = settings.graph_checkpoint_backend
+    checkpoint_backend: str = "postgres"
     interrupt_before: tuple[str, ...] = field(default_factory=tuple)
     interrupt_after: tuple[str, ...] = field(default_factory=tuple)
 
@@ -46,13 +45,9 @@ class GraphStateManager:
 
     @staticmethod
     def _build_checkpoint_store(backend: str):
-        if backend in {"database", "persistent"}:
-            return DatabaseCheckpointStore()
-        if backend == "memory":
-            return MemoryCheckpointStore()
-        if backend == "none":
-            return NoCheckpointStore()
-        raise ValueError(f"Unsupported checkpoint_backend: {backend}")
+        if backend != "postgres":
+            raise ValueError(f"Unsupported checkpoint_backend: {backend}")
+        return PostgresCheckpointStore()
 
     def compile(self):
         return self.runtime.compiled()

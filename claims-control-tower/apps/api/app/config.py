@@ -35,7 +35,6 @@ class Settings:
     use_mock_ocr: bool = _env_flag("USE_MOCK_OCR", True)
     use_mock_sqs: bool = _env_flag("USE_MOCK_SQS", True)
     default_hitl_required: bool = _env_flag("DEFAULT_HITL_REQUIRED", True)
-    graph_checkpoint_backend: str = os.getenv("GRAPH_CHECKPOINT_BACKEND", "database")
 
 
 settings = Settings()

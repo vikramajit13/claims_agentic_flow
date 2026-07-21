@@ -9,9 +9,6 @@ from sqlalchemy import JSON, DateTime, Float, Integer, String, Text, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 
@@ -28,27 +25,13 @@ def _build_async_database_url(raw_url: str) -> str:
     return raw_url
 
 
-def _build_sync_database_url(raw_url: str) -> str:
-    if raw_url.startswith("sqlite+aiosqlite"):
-        return raw_url.replace("sqlite+aiosqlite", "sqlite+pysqlite", 1)
-    return raw_url
-
-
 database_url = _build_async_database_url(settings.database_url)
-sync_database_url = _build_sync_database_url(settings.database_url)
 engine_kwargs = {"future": True}
 if database_url.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
-    engine_kwargs["poolclass"] = StaticPool
-sync_engine_kwargs = {"future": True}
-if sync_database_url.startswith("sqlite"):
-    sync_engine_kwargs["connect_args"] = {"check_same_thread": False}
-    sync_engine_kwargs["poolclass"] = StaticPool
 
 engine = create_async_engine(database_url, **engine_kwargs)
-sync_engine = create_engine(sync_database_url, **sync_engine_kwargs)
 SessionLocal = async_sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, class_=AsyncSession)
-SyncSessionLocal = sessionmaker(bind=sync_engine, autoflush=False, expire_on_commit=False)
 
 
 class ClaimRecord(Base):
@@ -203,7 +186,3 @@ async def _ensure_claim_document_columns(connection) -> None:
             if column_name in existing_names:
                 continue
             await connection.execute(text(f"ALTER TABLE claim_documents ADD COLUMN {column_name} {column_type}"))
-
-
-def _ensure_sync_tables() -> None:
-    Base.metadata.create_all(bind=sync_engine)

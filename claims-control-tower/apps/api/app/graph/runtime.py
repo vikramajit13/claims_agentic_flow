@@ -6,7 +6,7 @@ from functools import lru_cache
 from typing import Any
 from uuid import uuid4
 
-from app.graph.checkpoints import CheckpointStore, NoCheckpointStore
+from app.graph.checkpoints import CheckpointStore
 from app.graph.state import ClaimGraphState
 
 
@@ -22,7 +22,9 @@ class GraphRuntimeConfig:
 class ClaimGraphRuntime:
     def __init__(self, *, builder, checkpoint_store: CheckpointStore | None, config: GraphRuntimeConfig) -> None:
         self.builder = builder
-        self.checkpoint_store = checkpoint_store or NoCheckpointStore()
+        if checkpoint_store is None:
+            raise ValueError("A Postgres checkpoint store is required.")
+        self.checkpoint_store = checkpoint_store
         self.config = config
 
     @lru_cache(maxsize=1)
