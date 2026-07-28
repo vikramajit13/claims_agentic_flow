@@ -3,7 +3,7 @@ from langgraph.types import Command, interrupt
 from app.graph.state import ClaimGraphState
 
 
-async def human_in_the_loop_review(state: ClaimGraphState) -> dict:
+async def human_in_the_loop_review(state: ClaimGraphState) -> Command[str]:
     review_request = {
         "step": "human_review",
         "claim_id": state.claim_id,
