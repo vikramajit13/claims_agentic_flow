@@ -1,0 +1,178 @@
+[
+  {
+    "name": "low_risk_claim_completes_without_hitl",
+    "claim_id": 9001,
+    "thread_id": "golden-low-risk-9001",
+    "claim": {
+      "description": "Minor bumper scratch from parking incident",
+      "claim_amount": 1200,
+      "claim_type": "motor",
+      "incident_date": "2026-07-10",
+      "documents": [
+        {
+          "id": 101,
+          "file_name": "damage-photo.jpg",
+          "content_type": "image/jpeg",
+          "s3_uri": "s3://claims-bucket/claims/9001/damage-photo.jpg",
+          "s3_bucket": "claims-bucket",
+          "s3_key": "claims/9001/damage-photo.jpg",
+          "upload_status": "ocr_completed",
+          "ocr_requested": true,
+          "ocr_status": "completed",
+          "ocr_text": "Photo of rear bumper scratch",
+          "normalized_text": "Photo of rear bumper scratch",
+          "document_classification": {
+            "document_type": "photo"
+          },
+          "quality_assessment": {
+            "review_recommended": false
+          },
+          "normalized_payload": {
+            "document_type": "photo",
+            "extracted_fields": {}
+          },
+          "normalized_document_type": "photo",
+          "normalized_confidence": 0.98,
+          "created_at": "2026-07-10T10:00:00+10:00",
+          "updated_at": "2026-07-10T10:05:00+10:00"
+        },
+        {
+          "id": 102,
+          "file_name": "repair-estimate.pdf",
+          "content_type": "application/pdf",
+          "s3_uri": "s3://claims-bucket/claims/9001/repair-estimate.pdf",
+          "s3_bucket": "claims-bucket",
+          "s3_key": "claims/9001/repair-estimate.pdf",
+          "upload_status": "ocr_completed",
+          "ocr_requested": true,
+          "ocr_status": "completed",
+          "ocr_text": "Repair estimate total 1200 AUD",
+          "normalized_text": "Repair estimate total 1200 AUD",
+          "document_classification": {
+            "document_type": "repair_estimate"
+          },
+          "extracted_fields": {
+            "invoice_amount": 1200,
+            "invoice_date": "2026-07-10",
+            "vendor_name": "Sydney Repairs",
+            "currency": "AUD"
+          },
+          "quality_assessment": {
+            "review_recommended": false
+          },
+          "normalized_payload": {
+            "document_type": "repair_estimate",
+            "extracted_fields": {
+              "invoice_amount": 1200,
+              "invoice_date": "2026-07-10",
+              "vendor_name": "Sydney Repairs",
+              "currency": "AUD"
+            }
+          },
+          "normalized_document_type": "repair_estimate",
+          "normalized_confidence": 0.96,
+          "created_at": "2026-07-10T10:06:00+10:00",
+          "updated_at": "2026-07-10T10:07:00+10:00"
+        }
+      ]
+    },
+    "expected": {
+      "mode": "completed",
+      "current_step": "risk_analysis",
+      "risk_level": "LOW",
+      "requires_human_review": false,
+      "completed_steps_include": [
+        "process_claim",
+        "validate_claim_context",
+        "analyse_risk"
+      ]
+    }
+  },
+  {
+    "name": "incomplete_context_interrupts_for_human_review",
+    "claim_id": 9002,
+    "thread_id": "golden-context-invalid-9002",
+    "claim": {
+      "description": null,
+      "claim_amount": 1200,
+      "claim_type": "travel",
+      "incident_date": "2026-07-11",
+      "documents": []
+    },
+    "expected": {
+      "mode": "interrupt",
+      "interrupt_step": "human_review",
+      "interrupt_errors_include": [
+        "missing_claim_description",
+        "missing_claim_documents"
+      ]
+    }
+  },
+  {
+    "name": "high_risk_claim_resumes_after_human_review",
+    "claim_id": 9003,
+    "thread_id": "golden-high-risk-9003",
+    "claim": {
+      "description": "Motor accident with invoice anomaly",
+      "claim_amount": 2400,
+      "claim_type": "motor",
+      "incident_date": "2026-07-10",
+      "documents": [
+        {
+          "id": 103,
+          "file_name": "repair-invoice.pdf",
+          "content_type": "application/pdf",
+          "s3_uri": "s3://claims-bucket/claims/9003/repair-invoice.pdf",
+          "s3_bucket": "claims-bucket",
+          "s3_key": "claims/9003/repair-invoice.pdf",
+          "upload_status": "ocr_completed",
+          "ocr_requested": true,
+          "ocr_status": "completed",
+          "ocr_text": "Repair invoice for front bumper damage",
+          "normalized_text": "Repair invoice for front bumper damage",
+          "document_classification": {
+            "document_type": "invoice"
+          },
+          "extracted_fields": {
+            "invoice_amount": 2400,
+            "invoice_date": "2026-07-12",
+            "vendor_name": "Sydney Repairs",
+            "currency": "AUD"
+          },
+          "quality_assessment": {
+            "review_recommended": true
+          },
+          "normalized_payload": {
+            "document_type": "invoice",
+            "extracted_fields": {
+              "invoice_amount": 2400,
+              "invoice_date": "2026-07-12",
+              "vendor_name": "Sydney Repairs",
+              "currency": "AUD"
+            }
+          },
+          "normalized_document_type": "invoice",
+          "normalized_confidence": 0.62,
+          "created_at": "2026-07-10T10:00:00+10:00",
+          "updated_at": "2026-07-10T10:05:00+10:00"
+        }
+      ]
+    },
+    "resume_payload": {
+      "decision": "approve",
+      "notes": "Manual review completed."
+    },
+    "expected": {
+      "mode": "resume",
+      "interrupt_step": "human_review",
+      "interrupt_risk_level": "HIGH",
+      "resumed_current_step": "post_human_review",
+      "human_review_decision": "approve",
+      "human_review_notes": "Manual review completed.",
+      "completed_steps_include": [
+        "human_review",
+        "post_human_review"
+      ]
+    }
+  }
+]
