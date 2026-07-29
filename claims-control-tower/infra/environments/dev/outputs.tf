@@ -88,6 +88,26 @@ output "alb_dns_name" {
   value       = aws_lb.api.dns_name
 }
 
+output "api_base_url" {
+  description = "Public base URL for the API service."
+  value       = "http://${aws_lb.api.dns_name}"
+}
+
+output "api_healthcheck_url" {
+  description = "Public healthcheck URL for the API service."
+  value       = "http://${aws_lb.api.dns_name}/health"
+}
+
+output "frontend_cloudfront_domain_name" {
+  description = "Public CloudFront domain name for the frontend."
+  value       = aws_cloudfront_distribution.frontend.domain_name
+}
+
+output "frontend_base_url" {
+  description = "Public HTTPS URL for the frontend."
+  value       = "https://${aws_cloudfront_distribution.frontend.domain_name}"
+}
+
 output "ecs_execution_role_arn" {
   description = "ECS execution role ARN."
   value       = aws_iam_role.ecs_execution.arn

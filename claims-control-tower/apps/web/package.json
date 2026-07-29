@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@tanstack/react-query": "latest",
@@ -19,9 +20,12 @@
     "zustand": "latest"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react-swc": "latest",
+    "tailwindcss": "^4.3.3",
     "typescript": "latest",
     "vite": "latest"
   }

@@ -59,6 +59,16 @@ The dev environment expects these Secrets Manager ARNs in `infra/environments/de
 2. Create the `internal-service-token` secret in AWS Secrets Manager with a random string value.
 3. Run `terraform apply` in `infra/environments/dev`.
 4. Deploy the API container so the ALB target serves the latest backend code.
+   Then copy Terraform outputs into GitHub Actions variables:
+   - `aws_region` -> `AWS_REGION`
+   - `ecr_repository` -> `ECR_REPOSITORY`
+   - `ecs_cluster` -> `ECS_CLUSTER`
+   - `ecs_service` -> `ECS_SERVICE`
+   - `ecs_task_definition_family` -> `ECS_TASK_DEFINITION`
+   - `ecs_container_name` -> `ECS_CONTAINER_NAME`
+   - `frontend_bucket` -> `FRONTEND_S3_BUCKET`
+   - `cloudfront_distribution_id` -> `CLOUDFRONT_DISTRIBUTION_ID`
+   - `api_base_url` -> `VITE_API_BASE_URL`
 5. Call `POST /v1/claims/{claim_id}/documents/presign` and keep the returned `upload_headers`.
 6. Upload the file to the returned pre-signed URL and include every header from `upload_headers`.
 7. Confirm in CloudWatch:

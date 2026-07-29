@@ -10,6 +10,38 @@ permissions:
   contents: read
 
 jobs:
+  terraform:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive claims-control-tower/infra
+
+      - name: Terraform init bootstrap
+        working-directory: claims-control-tower/infra/bootstrap
+        run: terraform init -backend=false
+
+      - name: Terraform validate bootstrap
+        working-directory: claims-control-tower/infra/bootstrap
+        run: terraform validate
+
+      - name: Terraform init dev
+        working-directory: claims-control-tower/infra/environments/dev
+        run: terraform init -backend=false
+
+      - name: Terraform validate dev
+        working-directory: claims-control-tower/infra/environments/dev
+        run: terraform validate
+
   api:
     name: API Tests
     runs-on: ubuntu-latest
@@ -46,12 +78,8 @@ jobs:
         run: pytest -q tests
 
   web:
-    name: Web Build
+    name: Web Build And E2E
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: claims-control-tower/apps/web
 
     steps:
       - name: Checkout
@@ -64,8 +92,22 @@ jobs:
           cache: npm
           cache-dependency-path: claims-control-tower/package-lock.json
 
-      - name: Install web dependencies
+      - name: Install workspace dependencies
+        working-directory: claims-control-tower
         run: npm ci
 
       - name: Build web app
-        run: npm run build
+        working-directory: claims-control-tower
+        env:
+          VITE_API_BASE_URL: http://127.0.0.1:8000
+        run: npm run web:build
+
+      - name: Install Playwright Chromium
+        working-directory: claims-control-tower/apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run web end-to-end tests
+        working-directory: claims-control-tower
+        env:
+          VITE_API_BASE_URL: http://127.0.0.1:8000
+        run: npm run web:test:e2e

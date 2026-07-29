@@ -141,6 +141,7 @@ Typical mappings:
 - `ecs_container_name` -> `ECS_CONTAINER_NAME`
 - `frontend_bucket` -> `FRONTEND_S3_BUCKET`
 - `cloudfront_distribution_id` -> `CLOUDFRONT_DISTRIBUTION_ID`
+- `api_base_url` -> `VITE_API_BASE_URL`
 
 Additional worker outputs are also available for later use:
 
@@ -153,6 +154,10 @@ The bootstrap output:
 - `github_actions_role_arn`
 
 should be stored in GitHub as the `AWS_ROLE_ARN` secret.
+
+For the current frontend deployment, `VITE_API_BASE_URL` is required.
+If it is not set in GitHub Actions, the built web app will fall back to the
+local development default `http://127.0.0.1:8000`, which is incorrect for AWS.
 
 After that, deploy from GitHub Actions:
 
