@@ -78,13 +78,15 @@
     },
     "expected": {
       "mode": "completed",
-      "current_step": "risk_analysis",
+      "current_step": "recommend_next_action",
       "risk_level": "LOW",
       "requires_human_review": false,
       "completed_steps_include": [
         "process_claim",
         "validate_claim_context",
-        "analyse_risk"
+        "analyse_risk",
+        "claim_investigation",
+        "recommend_next_action"
       ]
     }
   },

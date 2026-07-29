@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
-from app.graph.builder import ClaimReviewGraphBuilder
+from app.graph.builder import (
+    CLAIM_INVESTIGATION_GRAPH,
+    CLAIM_REVIEW_GRAPH,
+    GraphBuilder,
+    GraphDefinition,
+)
 from app.graph.checkpoints import PostgresCheckpointStore
-from app.graph.runtime import ClaimGraphRuntime, GraphRuntimeConfig
+from app.graph.runtime import GraphRuntime, GraphRuntimeConfig
 
 
 @dataclass(frozen=True)
 class GraphStateManagerConfig:
-    graph_name: str = "claim_review_graph"
-    graph_version: str = "v1"
+    graph_name: str
+    graph_version: str
+    builder_factory: type[GraphBuilder]
     debug: bool = False
     checkpoint_backend: str = "postgres"
     interrupt_before: tuple[str, ...] = field(default_factory=tuple)
@@ -19,8 +26,7 @@ class GraphStateManagerConfig:
 
 @dataclass(frozen=True)
 class GraphStateManagerFactoryConfig:
-    graph_name: str = "claim_review_graph"
-    graph_version: str = "v1"
+    graph_key: str = "claim_review"
     debug: bool = False
     checkpoint_backend: str = "postgres"
     interrupt_before: tuple[str, ...] = field(default_factory=tuple)
@@ -28,13 +34,13 @@ class GraphStateManagerFactoryConfig:
 
 
 class GraphStateManager:
-    def __init__(self, config: GraphStateManagerConfig) -> None:
+    def __init__(self, config: GraphStateManagerConfig, runtime_cls: type[GraphRuntime], config_cls: type[GraphRuntimeConfig]) -> None:
         self.config = config
         checkpoint_store = self._build_checkpoint_store(config.checkpoint_backend)
-        self.runtime = ClaimGraphRuntime(
-            builder=ClaimReviewGraphBuilder(),
+        self.runtime = runtime_cls(
+            builder=config.builder_factory(),
             checkpoint_store=checkpoint_store,
-            config=GraphRuntimeConfig(
+            config=config_cls(
                 graph_name=config.graph_name,
                 graph_version=config.graph_version,
                 debug=config.debug,
@@ -60,21 +66,48 @@ class GraphStateManager:
 
 
 class GraphStateManagerFactory:
+    GRAPH_REGISTRY: dict[str, GraphDefinition] = {
+        "claim_review": CLAIM_REVIEW_GRAPH,
+        "claim_investigation": CLAIM_INVESTIGATION_GRAPH,
+    }
+
     def __init__(self, config: GraphStateManagerFactoryConfig | None = None) -> None:
         self.config = config or GraphStateManagerFactoryConfig()
 
+    @classmethod
+    def get_definition(cls, graph_key: str) -> GraphDefinition:
+        try:
+            return cls.GRAPH_REGISTRY[graph_key]
+        except KeyError as exc:
+            available = ", ".join(sorted(cls.GRAPH_REGISTRY))
+            raise ValueError(f"Unknown graph_key '{graph_key}'. Available graph keys: {available}") from exc
+
     def create(self) -> GraphStateManager:
+        definition = self.get_definition(self.config.graph_key)
         return GraphStateManager(
             GraphStateManagerConfig(
-                graph_name=self.config.graph_name,
-                graph_version=self.config.graph_version,
+                graph_name=definition.name,
+                graph_version=definition.version,
+                builder_factory=definition.builder_factory,
                 debug=self.config.debug,
                 checkpoint_backend=self.config.checkpoint_backend,
                 interrupt_before=self.config.interrupt_before,
                 interrupt_after=self.config.interrupt_after,
-            )
+            ),
+            runtime_cls=GraphRuntime,
+            config_cls=GraphRuntimeConfig,
         )
 
 
 def build_claim_graph():
-    return GraphStateManagerFactory().create().runtime.compiled()
+    return GraphStateManagerFactory(
+        GraphStateManagerFactoryConfig(graph_key="claim_review")
+    ).create().runtime.compiled()
+
+def build_investigation_graph():
+    return GraphStateManagerFactory(
+        GraphStateManagerFactoryConfig(graph_key="claim_investigation")
+    ).create().runtime.compiled()
+
+
+ClaimGraphRuntime = GraphRuntime

@@ -7,7 +7,6 @@ from typing import Any
 from uuid import uuid4
 
 from app.graph.checkpoints import CheckpointStore
-from app.graph.state import ClaimGraphState
 
 
 @dataclass(frozen=True)
@@ -19,7 +18,7 @@ class GraphRuntimeConfig:
     interrupt_after: tuple[str, ...] = ()
 
 
-class ClaimGraphRuntime:
+class GraphRuntime:
     def __init__(self, *, builder, checkpoint_store: CheckpointStore | None, config: GraphRuntimeConfig) -> None:
         self.builder = builder
         if checkpoint_store is None:
@@ -40,14 +39,14 @@ class ClaimGraphRuntime:
             compile_kwargs["checkpointer"] = checkpointer
         return workflow.compile(**compile_kwargs)
 
-    def invoke(self, initial_state: ClaimGraphState | dict[str, Any], *, thread_id: str | None = None) -> Any:
+    def invoke(self, initial_state: Any, *, thread_id: str | None = None) -> Any:
         try:
             asyncio.get_running_loop()
         except RuntimeError:
             return asyncio.run(self.ainvoke(initial_state, thread_id=thread_id))
-        raise RuntimeError("ClaimGraphRuntime.invoke() cannot be used from an async context; use ainvoke() instead.")
+        raise RuntimeError("GraphRuntime.invoke() cannot be used from an async context; use ainvoke() instead.")
 
-    async def ainvoke(self, initial_state: ClaimGraphState | dict[str, Any], *, thread_id: str | None = None) -> Any:
+    async def ainvoke(self, initial_state: Any, *, thread_id: str | None = None) -> Any:
         derived_thread_id = thread_id
         if derived_thread_id is None:
             if isinstance(initial_state, dict):
@@ -77,3 +76,6 @@ class ClaimGraphRuntime:
             graph_input,
             config={"configurable": {"thread_id": derived_thread_id}},
         )
+
+
+ClaimGraphRuntime = GraphRuntime

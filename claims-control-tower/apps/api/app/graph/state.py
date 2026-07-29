@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from typing import Annotated, Any
+
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.document import ClaimDocumentState
@@ -7,9 +11,11 @@ from app.schemas.workflow import ClaimWorkflowState
 
 
 class ClaimGraphState(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True)
 
     claim_id: int
+    customer_id: int | None = None
+    policy_id: str | None = None
     graph_name: str = "claim_review_graph"
     graph_version: str = "v1"
     graph_run_id: str | None = None
@@ -35,3 +41,13 @@ class ClaimGraphState(BaseModel):
     completed_steps: list[str] = Field(default_factory=list)
     requires_human_review: bool = False
     correlation_id: str | None = None
+    recommended_next_action: str | None = None
+    recommended_next_action_reason: str | None = None
+    tool_results: dict[str, Any] = Field(default_factory=dict)
+    messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
+    investigation_notes: list[str] = Field(default_factory=list)
+    investigation_errors: list[str] = Field(default_factory=list)
+    investigation_required: bool = False
+
+
+InvestigateClaimGraphState = ClaimGraphState

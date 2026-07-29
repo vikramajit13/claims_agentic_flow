@@ -1,0 +1,563 @@
+[
+  {
+    "id": 29,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "workflow_started",
+    "step_name": "claim_intake",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "message": "Workflow run created"
+    },
+    "created_at": "2026-05-21T12:23:57.712596"
+  },
+  {
+    "id": 30,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "step_started",
+    "step_name": "coverage_validation",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "status": "started"
+    },
+    "created_at": "2026-05-21T12:23:57.713412"
+  },
+  {
+    "id": 31,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "step_completed",
+    "step_name": "coverage_validation",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "is_valid": true,
+      "reasons": [],
+      "policy_id": 1,
+      "coverage_limit": 10000.0
+    },
+    "created_at": "2026-05-21T12:23:57.713863"
+  },
+  {
+    "id": 32,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "policy_validated",
+    "step_name": "coverage_validation",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "is_valid": true,
+      "reasons": [],
+      "policy_id": 1,
+      "coverage_limit": 10000.0
+    },
+    "created_at": "2026-05-21T12:23:57.713893"
+  },
+  {
+    "id": 33,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "step_started",
+    "step_name": "evidence_validation",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "status": "started"
+    },
+    "created_at": "2026-05-21T12:23:57.713929"
+  },
+  {
+    "id": 34,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "step_completed",
+    "step_name": "evidence_validation",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "is_valid": true,
+      "required_documents": [
+        "photo",
+        "repair_estimate"
+      ],
+      "provided_documents": [
+        "photo",
+        "repair_estimate"
+      ],
+      "missing_documents": [],
+      "reasons": []
+    },
+    "created_at": "2026-05-21T12:23:57.714271"
+  },
+  {
+    "id": 35,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "documents_validated",
+    "step_name": "evidence_validation",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "is_valid": true,
+      "required_documents": [
+        "photo",
+        "repair_estimate"
+      ],
+      "provided_documents": [
+        "photo",
+        "repair_estimate"
+      ],
+      "missing_documents": [],
+      "reasons": []
+    },
+    "created_at": "2026-05-21T12:23:57.714301"
+  },
+  {
+    "id": 36,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "step_started",
+    "step_name": "fraud_risk_check",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "status": "started"
+    },
+    "created_at": "2026-05-21T12:23:57.714337"
+  },
+  {
+    "id": 37,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "step_completed",
+    "step_name": "fraud_risk_check",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "risk_score": 20,
+      "risk_level": "LOW",
+      "risk_factors": [
+        "Multiple claims by same customer in the last 30 days"
+      ]
+    },
+    "created_at": "2026-05-21T12:23:57.714669"
+  },
+  {
+    "id": 38,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "fraud_rules_evaluated",
+    "step_name": "fraud_risk_check",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "risk_score": 20,
+      "risk_level": "LOW",
+      "risk_factors": [
+        "Multiple claims by same customer in the last 30 days"
+      ]
+    },
+    "created_at": "2026-05-21T12:23:57.714707"
+  },
+  {
+    "id": 39,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "business_guardrails_evaluated",
+    "step_name": "PRE_ADJUDICATION_GUARDRAILS",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "overall_decision": "PASS",
+      "results": [
+        {
+          "code": "POLICY_ACTIVE",
+          "category": "POLICY",
+          "decision": "PASS",
+          "severity": "LOW",
+          "message": "Policy is active",
+          "details": {}
+        },
+        {
+          "code": "EARLY_CLAIM_AFTER_POLICY_START",
+          "category": "FRAUD_RISK",
+          "decision": "PASS",
+          "severity": "LOW",
+          "message": "Incident did not occur within early-claim review window",
+          "details": {}
+        },
+        {
+          "code": "INCIDENT_WITHIN_COVERAGE_PERIOD",
+          "category": "POLICY",
+          "decision": "PASS",
+          "severity": "LOW",
+          "message": "Incident date is within policy coverage period",
+          "details": {}
+        },
+        {
+          "code": "CLAIM_AMOUNT_ABOVE_REVIEW_THRESHOLD",
+          "category": "CLAIM",
+          "decision": "PASS",
+          "severity": "LOW",
+          "message": "Claim amount is below manual review threshold",
+          "details": {}
+        },
+        {
+          "code": "INVOICE_DATE_BEFORE_INCIDENT",
+          "category": "FRAUD_RISK",
+          "decision": "PASS",
+          "severity": "LOW",
+          "message": "No invoice date anomaly detected",
+          "details": {}
+        },
+        {
+          "code": "REPEAT_CLAIMS_REVIEW_REQUIRED",
+          "category": "FRAUD_RISK",
+          "decision": "PASS",
+          "severity": "LOW",
+          "message": "Repeat claim threshold not met",
+          "details": {}
+        },
+        {
+          "code": "PRIOR_REJECTED_CLAIM",
+          "category": "CLAIM",
+          "decision": "PASS",
+          "severity": "LOW",
+          "message": "No prior rejected claim linked",
+          "details": {}
+        }
+      ]
+    },
+    "created_at": "2026-05-21T12:23:57.715295"
+  },
+  {
+    "id": 40,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "recommendation_created",
+    "step_name": "adjudication",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "recommendation": "APPROVE",
+      "reason": "Claim passed automated checks",
+      "recommended_amount": 4200.0,
+      "requires_human_review": false,
+      "risk_factors": [],
+      "recommended_action": "AUTO_APPROVE"
+    },
+    "created_at": "2026-05-21T12:23:57.715487"
+  },
+  {
+    "id": 41,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "ai_evidence_analysis_completed",
+    "step_name": "adjudication",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "evidence_quality": "good",
+      "evidence_summary": "Evidence analysis fallback generated from workflow context.",
+      "evidence_concerns": [],
+      "missing_information": [],
+      "recommended_evidence_checks": [
+        "Review uploaded documents for completeness.",
+        "Verify any flagged evidence concerns before final decisioning."
+      ]
+    },
+    "created_at": "2026-05-21T12:23:57.755248"
+  },
+  {
+    "id": 42,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "ai_risk_analysis_completed",
+    "step_name": "adjudication",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "risk_score": 20,
+      "risk_level": "LOW",
+      "risk_summary": "Risk analysis fallback generated from workflow context.",
+      "primary_risk_drivers": [
+        "Multiple claims by same customer in the last 30 days"
+      ],
+      "key_risk_drivers": [
+        "Multiple claims by same customer in the last 30 days"
+      ],
+      "risk_mitigations": [
+        "Validate any missing or contradictory evidence before finalizing the claim.",
+        "Confirm the claim timeline against policy and document dates."
+      ],
+      "requires_human_review": false
+    },
+    "created_at": "2026-05-21T12:23:57.755316"
+  },
+  {
+    "id": 43,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "ai_adjuster_briefing_generated",
+    "step_name": "adjudication",
+    "actor_type": "system",
+    "adjuster_briefing": {
+      "briefing_summary": "Claim 7 requires adjuster review before a final decision.",
+      "why_workflow_paused": [
+        "Claim passed automated checks",
+        "Policy is active",
+        "Incident did not occur within early-claim review window",
+        "Incident date is within policy coverage period",
+        "Claim amount is below manual review threshold",
+        "No invoice date anomaly detected",
+        "Repeat claim threshold not met",
+        "No prior rejected claim linked"
+      ],
+      "key_risk_factors": [
+        {
+          "risk": "Multiple claims by same customer in the last 30 days",
+          "severity": "MEDIUM",
+          "explanation": "Multiple claims by same customer in the last 30 days"
+        }
+      ],
+      "evidence_concerns": [],
+      "recommended_adjuster_actions": [
+        "Review the claim timeline and supporting evidence.",
+        "Confirm whether the recommendation should be approved, rejected, or modified.",
+        "Document the rationale clearly for audit purposes."
+      ],
+      "questions_for_customer_or_repairer": [
+        "Can you explain: Claim passed automated checks?"
+      ],
+      "decision_options": [
+        {
+          "decision": "APPROVE",
+          "when_to_use": "Use when the evidence supports the claim and no unresolved risks remain."
+        },
+        {
+          "decision": "REJECT",
+          "when_to_use": "Use when material inconsistencies or policy violations remain unresolved."
+        },
+        {
+          "decision": "REQUEST_MORE_INFO",
+          "when_to_use": "Use when more evidence is needed before reaching a decision."
+        }
+      ],
+      "customer_safe_message": "Your claim is under specialist review. We may contact you shortly if we need any clarification."
+    },
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "briefing_summary": "Claim 7 requires adjuster review before a final decision.",
+      "why_workflow_paused": [
+        "Claim passed automated checks",
+        "Policy is active",
+        "Incident did not occur within early-claim review window",
+        "Incident date is within policy coverage period",
+        "Claim amount is below manual review threshold",
+        "No invoice date anomaly detected",
+        "Repeat claim threshold not met",
+        "No prior rejected claim linked"
+      ],
+      "recommended_adjuster_actions": [
+        "Review the claim timeline and supporting evidence.",
+        "Confirm whether the recommendation should be approved, rejected, or modified.",
+        "Document the rationale clearly for audit purposes."
+      ]
+    },
+    "created_at": "2026-05-21T12:23:57.755356"
+  },
+  {
+    "id": 44,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "step_started",
+    "step_name": "payment_guardrail",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "status": "started"
+    },
+    "created_at": "2026-05-21T12:23:57.755461"
+  },
+  {
+    "id": 45,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "business_guardrails_evaluated",
+    "step_name": "PRE_PAYMENT_GUARDRAILS",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "overall_decision": "PASS",
+      "results": [
+        {
+          "code": "PAYOUT_NEAR_POLICY_LIMIT",
+          "category": "PAYMENT",
+          "decision": "PASS",
+          "severity": "LOW",
+          "message": "Payout amount is not near policy coverage limit",
+          "details": {}
+        },
+        {
+          "code": "FINAL_PAYOUT_EXCEEDS_APPROVED_AMOUNT",
+          "category": "PAYMENT",
+          "decision": "PASS",
+          "severity": "LOW",
+          "message": "Final payout amount does not exceed approved amount",
+          "details": {}
+        },
+        {
+          "code": "HIGH_RISK_PAYMENT_REQUIRES_HUMAN_APPROVAL",
+          "category": "PAYMENT",
+          "decision": "PASS",
+          "severity": "LOW",
+          "message": "High-risk payment approval requirement satisfied",
+          "details": {}
+        }
+      ]
+    },
+    "created_at": "2026-05-21T12:23:57.755605"
+  },
+  {
+    "id": 46,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "step_completed",
+    "step_name": "payment_guardrail",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "payment_guardrails": {
+        "guardrail_status": "passed",
+        "reasons": []
+      },
+      "business_guardrails": {
+        "overall_decision": "PASS",
+        "results": [
+          {
+            "code": "PAYOUT_NEAR_POLICY_LIMIT",
+            "category": "PAYMENT",
+            "decision": "PASS",
+            "severity": "LOW",
+            "message": "Payout amount is not near policy coverage limit",
+            "details": {}
+          },
+          {
+            "code": "FINAL_PAYOUT_EXCEEDS_APPROVED_AMOUNT",
+            "category": "PAYMENT",
+            "decision": "PASS",
+            "severity": "LOW",
+            "message": "Final payout amount does not exceed approved amount",
+            "details": {}
+          },
+          {
+            "code": "HIGH_RISK_PAYMENT_REQUIRES_HUMAN_APPROVAL",
+            "category": "PAYMENT",
+            "decision": "PASS",
+            "severity": "LOW",
+            "message": "High-risk payment approval requirement satisfied",
+            "details": {}
+          }
+        ]
+      }
+    },
+    "created_at": "2026-05-21T12:23:57.755624"
+  },
+  {
+    "id": 47,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "step_started",
+    "step_name": "payment_instruction",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "status": "started"
+    },
+    "created_at": "2026-05-21T12:23:57.755660"
+  },
+  {
+    "id": 48,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "step_completed",
+    "step_name": "payment_instruction",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "id": 1,
+      "claim_id": 7,
+      "workflow_run_id": 3,
+      "payee_customer_id": 100,
+      "amount": 4200.0,
+      "currency": "AUD",
+      "status": "ready_for_payment",
+      "guardrail_status": "passed",
+      "payment_reference": "PAY-7-1",
+      "created_at": "2026-05-21T12:23:57.755689",
+      "updated_at": "2026-05-21T12:23:57.755689"
+    },
+    "created_at": "2026-05-21T12:23:57.755835"
+  },
+  {
+    "id": 49,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "payment_instruction_created",
+    "step_name": "payment_instruction",
+    "actor_type": "payment_service",
+    "adjuster_briefing": null,
+    "actor_id": "mock_payment_adapter",
+    "event_payload": {
+      "id": 1,
+      "claim_id": 7,
+      "workflow_run_id": 3,
+      "payee_customer_id": 100,
+      "amount": 4200.0,
+      "currency": "AUD",
+      "status": "ready_for_payment",
+      "guardrail_status": "passed",
+      "payment_reference": "PAY-7-1",
+      "created_at": "2026-05-21T12:23:57.755689",
+      "updated_at": "2026-05-21T12:23:57.755689"
+    },
+    "created_at": "2026-05-21T12:23:57.755882"
+  },
+  {
+    "id": 50,
+    "workflow_run_id": 3,
+    "claim_id": 7,
+    "event_type": "workflow_completed",
+    "step_name": "completed",
+    "actor_type": "system",
+    "adjuster_briefing": null,
+    "actor_id": "workflow_engine",
+    "event_payload": {
+      "outcome": "payment_ready"
+    },
+    "created_at": "2026-05-21T12:23:57.755893"
+  }
+]
