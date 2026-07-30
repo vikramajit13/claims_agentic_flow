@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from app.config import settings
 from app.llm_client import LLMClient
 from app.observability import traceable
 from app.prompt_loader import load_prompt_artifact, render_prompt_template
+from app.security import inspect_document_prompt_injection
 from app.schemas.document import (
     DocumentClassificationResult,
     DocumentExtractedFields,
@@ -215,7 +217,14 @@ class LLMDocumentIntelligenceService:
         return artifact.body, artifact.metadata
 
     def _build_user_prompt(self, *, file_name: str, normalized_text: str, textract_result: TextractResult) -> str:
-        lines = [{"text": line.text, "confidence": line.confidence} for line in textract_result.lines[:40]]
+        prompt_injection = inspect_document_prompt_injection(normalized_text)
+        lines = [
+            {
+                "text": inspect_document_prompt_injection(line.text).sanitized_text,
+                "confidence": line.confidence,
+            }
+            for line in textract_result.lines[:40]
+        ]
         artifact = load_prompt_artifact(
             domain="document_intelligence",
             role="user",
@@ -225,8 +234,17 @@ class LLMDocumentIntelligenceService:
             artifact.body,
             {
                 "file_name": file_name,
-                "normalized_text": normalized_text,
-                "textract_lines": lines,
+                "normalized_text": json.dumps(prompt_injection.sanitized_text, ensure_ascii=True),
+                "textract_lines": json.dumps(lines, ensure_ascii=True),
+                "read_only_notice": prompt_injection.read_only_notice,
+                "prompt_injection_flags": json.dumps(
+                    {
+                        "suspicious": prompt_injection.suspicious,
+                        "risk_score": prompt_injection.risk_score,
+                        "matched_rules": prompt_injection.matched_rules,
+                    },
+                    ensure_ascii=True,
+                ),
             },
         )
 
@@ -274,6 +292,14 @@ class DocumentIntelligenceOrchestrator:
     @traceable(name="run_document_intelligence", run_type="chain")
     def process(self, *, file_name: str, textract_result: TextractResult) -> DocumentIntelligenceResult:
         normalized_text, validation_results = self.fallback_service.normalize_text(textract_result.raw_text)
+        prompt_injection = inspect_document_prompt_injection(normalized_text)
+        validation_results = {
+            **validation_results,
+            "llm_input_mode": "read_only",
+            "prompt_injection_detected": prompt_injection.suspicious,
+            "prompt_injection_risk_score": prompt_injection.risk_score,
+            "prompt_injection_matched_rules": prompt_injection.matched_rules,
+        }
 
         if not self.llm_service.is_enabled():
             return self.fallback_service.process(
