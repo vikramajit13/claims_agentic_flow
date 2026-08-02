@@ -13,6 +13,11 @@ on:
         required: true
         type: boolean
         default: true
+      deploy_infra:
+        description: Apply Terraform dev infrastructure before deploying app workloads
+        required: true
+        type: boolean
+        default: false
       ref:
         description: Git ref to deploy
         required: false
@@ -25,16 +30,6 @@ permissions:
 concurrency:
   group: deploy-aws-${{ github.ref }}
   cancel-in-progress: false
-
-env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-  ECS_SERVICE: ${{ vars.ECS_SERVICE }}
-  ECS_TASK_DEFINITION: ${{ vars.ECS_TASK_DEFINITION }}
-  ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
-  FRONTEND_S3_BUCKET: ${{ vars.FRONTEND_S3_BUCKET }}
-  CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
 
 jobs:
   validate-config:
@@ -49,24 +44,90 @@ jobs:
             echo "Missing secret: AWS_ROLE_ARN"
             exit 1
           fi
-          if [[ "${{ inputs.deploy_api }}" == "true" ]]; then
-            for value in "$AWS_REGION" "$ECR_REPOSITORY" "$ECS_CLUSTER" "$ECS_SERVICE" "$ECS_TASK_DEFINITION" "$ECS_CONTAINER_NAME"; do
-              if [[ -z "$value" ]]; then
-                echo "Missing one or more required API deployment variables."
-                exit 1
-              fi
-            done
-          fi
-          if [[ "${{ inputs.deploy_web }}" == "true" ]]; then
-            if [[ -z "$AWS_REGION" || -z "$FRONTEND_S3_BUCKET" || -z "${{ vars.VITE_API_BASE_URL }}" ]]; then
-              echo "Missing one or more required web deployment variables, including VITE_API_BASE_URL."
+          if [[ "${{ inputs.deploy_infra }}" == "true" ]]; then
+            if [[ -z "${{ vars.TF_VAR_DATABASE_URL_SECRET_ARN }}" || -z "${{ vars.TF_VAR_INTERNAL_SERVICE_TOKEN_SECRET_ARN }}" ]]; then
+              echo "Missing required Terraform variables for infra apply."
+              echo "Expected repo variables: TF_VAR_DATABASE_URL_SECRET_ARN and TF_VAR_INTERNAL_SERVICE_TOKEN_SECRET_ARN"
               exit 1
             fi
           fi
 
+  terraform-dev:
+    name: Terraform Dev Outputs
+    needs: validate-config
+    runs-on: ubuntu-latest
+    outputs:
+      aws_region: ${{ steps.capture.outputs.aws_region }}
+      ecr_repository: ${{ steps.capture.outputs.ecr_repository }}
+      ecs_cluster: ${{ steps.capture.outputs.ecs_cluster }}
+      ecs_service: ${{ steps.capture.outputs.ecs_service }}
+      ecs_task_definition: ${{ steps.capture.outputs.ecs_task_definition }}
+      ecs_container_name: ${{ steps.capture.outputs.ecs_container_name }}
+      frontend_bucket: ${{ steps.capture.outputs.frontend_bucket }}
+      cloudfront_distribution_id: ${{ steps.capture.outputs.cloudfront_distribution_id }}
+      api_base_url: ${{ steps.capture.outputs.api_base_url }}
+      s3_event_lambda_name: ${{ steps.capture.outputs.s3_event_lambda_name }}
+      ocr_queue_lambda_name: ${{ steps.capture.outputs.ocr_queue_lambda_name }}
+    defaults:
+      run:
+        working-directory: claims-control-tower/infra/environments/dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ap-southeast-2
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform apply
+        if: ${{ inputs.deploy_infra }}
+        env:
+          TF_VAR_database_url_secret_arn: ${{ vars.TF_VAR_DATABASE_URL_SECRET_ARN }}
+          TF_VAR_internal_service_token_secret_arn: ${{ vars.TF_VAR_INTERNAL_SERVICE_TOKEN_SECRET_ARN }}
+          TF_VAR_langsmith_api_key_secret_arn: ${{ vars.TF_VAR_LANGSMITH_API_KEY_SECRET_ARN }}
+        run: terraform apply -auto-approve -input=false
+
+      - name: Capture Terraform outputs
+        id: capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform output -json > tf-outputs.json
+
+          output() {
+            local key="$1"
+            jq -r --arg key "$key" '.[$key].value' tf-outputs.json
+          }
+
+          {
+            echo "aws_region=$(output aws_region)"
+            echo "ecr_repository=$(output ecr_repository)"
+            echo "ecs_cluster=$(output ecs_cluster)"
+            echo "ecs_service=$(output ecs_service)"
+            echo "ecs_task_definition=$(output ecs_task_definition_family)"
+            echo "ecs_container_name=$(output ecs_container_name)"
+            echo "frontend_bucket=$(output frontend_bucket)"
+            echo "cloudfront_distribution_id=$(output cloudfront_distribution_id)"
+            echo "api_base_url=$(output api_base_url)"
+            echo "s3_event_lambda_name=$(output s3_event_lambda_name)"
+            echo "ocr_queue_lambda_name=$(output ocr_queue_lambda_name)"
+          } >> "$GITHUB_OUTPUT"
+
   deploy-api:
     name: Deploy API
-    needs: validate-config
+    needs: terraform-dev
     if: ${{ inputs.deploy_api }}
     runs-on: ubuntu-latest
     environment: production
@@ -84,7 +145,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ needs.terraform-dev.outputs.aws_region }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
 
       - name: Login to Amazon ECR
@@ -104,7 +165,7 @@ jobs:
       - name: Download current ECS task definition
         run: |
           aws ecs describe-task-definition \
-            --task-definition "$ECS_TASK_DEFINITION" \
+            --task-definition "${{ needs.terraform-dev.outputs.ecs_task_definition }}" \
             --query taskDefinition \
             > task-definition-full.json
 
@@ -122,28 +183,24 @@ jobs:
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: claims-control-tower/apps/api/task-definition.json
-          container-name: ${{ env.ECS_CONTAINER_NAME }}
+          task-definition: task-definition.json
+          container-name: ${{ needs.terraform-dev.outputs.ecs_container_name }}
           image: ${{ steps.build-image.outputs.image }}
 
       - name: Deploy ECS task definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ needs.terraform-dev.outputs.ecs_cluster }}
+          service: ${{ needs.terraform-dev.outputs.ecs_service }}
           wait-for-service-stability: true
 
   deploy-web:
     name: Deploy Web
-    needs: validate-config
+    needs: terraform-dev
     if: ${{ inputs.deploy_web }}
     runs-on: ubuntu-latest
     environment: production
-
-    defaults:
-      run:
-        working-directory: claims-control-tower/apps/web
 
     steps:
       - name: Checkout
@@ -159,27 +216,30 @@ jobs:
           cache-dependency-path: claims-control-tower/package-lock.json
 
       - name: Install web dependencies
+        working-directory: claims-control-tower
         run: npm ci
 
       - name: Build web app
+        working-directory: claims-control-tower
         env:
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          VITE_API_BASE_URL: ${{ needs.terraform-dev.outputs.api_base_url }}
           VITE_SSE_URL: ${{ vars.VITE_SSE_URL }}
           VITE_WEBSOCKET_URL: ${{ vars.VITE_WEBSOCKET_URL }}
-        run: npm run build
+        run: npm run web:build
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ needs.terraform-dev.outputs.aws_region }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
 
       - name: Sync static files to S3
-        run: aws s3 sync dist/ "s3://${FRONTEND_S3_BUCKET}" --delete
+        working-directory: claims-control-tower/apps/web
+        run: aws s3 sync dist/ "s3://${{ needs.terraform-dev.outputs.frontend_bucket }}" --delete
 
       - name: Invalidate CloudFront cache
-        if: ${{ env.CLOUDFRONT_DISTRIBUTION_ID != '' }}
+        if: ${{ needs.terraform-dev.outputs.cloudfront_distribution_id != '' }}
         run: >
           aws cloudfront create-invalidation
-          --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID"
+          --distribution-id "${{ needs.terraform-dev.outputs.cloudfront_distribution_id }}"
           --paths "/*"

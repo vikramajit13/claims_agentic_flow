@@ -53,29 +53,54 @@ The dev environment expects these Secrets Manager ARNs in `infra/environments/de
 
 `internal_service_token_secret_arn` should contain a plain string token. Terraform injects that secret into the ECS API task as `INTERNAL_SERVICE_TOKEN`, and both Lambdas read the same secret to authenticate their internal callback requests.
 
+## GitHub Actions Alignment
+
+The deployment workflow now reads live Terraform outputs from `infra/environments/dev` instead of relying on copied GitHub repository variables for ECS, ECR, ALB, and S3 names.
+
+This removes the biggest source of drift between Terraform and GitHub Actions for this phase.
+
+### GitHub repository configuration
+
+Required secret:
+
+- `AWS_ROLE_ARN`
+
+Optional repository variables for frontend runtime:
+
+- `VITE_SSE_URL`
+- `VITE_WEBSOCKET_URL`
+
+Required repository variables only when using `deploy_infra=true` in the deploy workflow:
+
+- `TF_VAR_DATABASE_URL_SECRET_ARN`
+- `TF_VAR_INTERNAL_SERVICE_TOKEN_SECRET_ARN`
+
+Optional repository variable for LangSmith injection during Terraform apply:
+
+- `TF_VAR_LANGSMITH_API_KEY_SECRET_ARN`
+
+### Important bootstrap note
+
+The GitHub OIDC deploy role must be re-applied from `infra/bootstrap` after these changes so it can read the Terraform remote state bucket.
+
+Without that bootstrap apply, the GitHub deployment workflow will not be able to load Terraform outputs.
+
 ## How To Apply And Test
 
 1. Create or update `infra/environments/dev/terraform.tfvars` from the example file.
 2. Create the `internal-service-token` secret in AWS Secrets Manager with a random string value.
 3. Run `terraform apply` in `infra/environments/dev`.
-4. Deploy the API container so the ALB target serves the latest backend code.
-   Then copy Terraform outputs into GitHub Actions variables:
-   - `aws_region` -> `AWS_REGION`
-   - `ecr_repository` -> `ECR_REPOSITORY`
-   - `ecs_cluster` -> `ECS_CLUSTER`
-   - `ecs_service` -> `ECS_SERVICE`
-   - `ecs_task_definition_family` -> `ECS_TASK_DEFINITION`
-   - `ecs_container_name` -> `ECS_CONTAINER_NAME`
-   - `frontend_bucket` -> `FRONTEND_S3_BUCKET`
-   - `cloudfront_distribution_id` -> `CLOUDFRONT_DISTRIBUTION_ID`
-   - `api_base_url` -> `VITE_API_BASE_URL`
-5. Call `POST /v1/claims/{claim_id}/documents/presign` and keep the returned `upload_headers`.
-6. Upload the file to the returned pre-signed URL and include every header from `upload_headers`.
-7. Confirm in CloudWatch:
+4. Re-apply `infra/bootstrap` so the GitHub OIDC deploy role can read the Terraform state bucket.
+5. Run the `Deploy AWS` GitHub Actions workflow.
+   - Use `deploy_infra=false` if infrastructure is already up to date.
+   - Use `deploy_infra=true` if Lambda packaging, ECS bootstrap changes, or other Terraform-managed infrastructure changed.
+6. Call `POST /v1/claims/{claim_id}/documents/presign` and keep the returned `upload_headers`.
+7. Upload the file to the returned pre-signed URL and include every header from `upload_headers`.
+8. Confirm in CloudWatch:
    - the S3 event Lambda ran
    - a message landed in the OCR queue
    - the OCR queue Lambda ran
-8. Fetch the claim again from the API and confirm the document moved to `ocr_completed`.
+9. Fetch the claim again from the API and confirm the document moved to `ocr_completed`.
 
 ## Important
 

@@ -41,6 +41,22 @@ data "aws_iam_policy_document" "github_assume_role" {
 
 data "aws_iam_policy_document" "github_deploy" {
   statement {
+    sid    = "TerraformStateAccess"
+    effect = "Allow"
+    actions = [
+      "s3:GetBucketLocation",
+      "s3:GetObject",
+      "s3:ListBucket",
+      "s3:PutObject",
+      "s3:DeleteObject"
+    ]
+    resources = [
+      "arn:aws:s3:::${var.terraform_state_bucket_name}",
+      "arn:aws:s3:::${var.terraform_state_bucket_name}/*"
+    ]
+  }
+
+  statement {
     sid    = "EcrAuth"
     effect = "Allow"
     actions = [

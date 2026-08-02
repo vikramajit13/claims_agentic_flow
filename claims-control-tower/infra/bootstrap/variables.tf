@@ -77,3 +77,9 @@ variable "pass_role_arns" {
     "arn:aws:iam::819926065191:role/claims-agent-dev-ecs-task"
   ]
 }
+
+variable "terraform_state_bucket_name" {
+  description = "S3 bucket used for Terraform remote state."
+  type        = string
+  default     = "claims-agent-terraform-state-819926065191-ap-southeast-2-an"
+}
