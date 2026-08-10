@@ -59,7 +59,13 @@ def test_process_claim(mock_get_claim):
     assert result["graph_run_id"] == "run_001"
     assert result["claim_status"] == "ready_for_graph"
     assert result["current_step"] == "graph_bootstrap"
-    assert result["execution_plan"] == ["graph_bootstrap", "validate_claim_context", "analyse_risk"]
+    assert result["execution_plan"] == [
+        "graph_bootstrap",
+        "validate_claim_context",
+        "analyse_risk",
+        "claim_investigation",
+        "recommend_next_action",
+    ]
     assert result["claim_documents"][0].document_id == 7
     assert result["claim_documents"][0].document_type == "PHOTO"
     assert result["claim_documents"][0].document_url == "s3://claims-bucket/claims/123/accident-photo.jpg"

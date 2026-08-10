@@ -141,3 +141,21 @@ variable "documents_bucket_name_override" {
   type        = string
   default     = null
 }
+
+variable "llm_provider" {
+  description = "LLM provider for document intelligence. Supported values: openai, bedrock."
+  type        = string
+  default     = "bedrock"
+}
+
+variable "document_intelligence_model" {
+  description = "Model identifier used by document intelligence."
+  type        = string
+  default     = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+}
+
+variable "enable_llm_document_intelligence" {
+  description = "Enable LLM-backed document intelligence."
+  type        = bool
+  default     = true
+}

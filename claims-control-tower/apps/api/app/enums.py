@@ -36,6 +36,8 @@ class WorkflowStep(StrEnum):
     DOCUMENT_COLLECTION = "document_collection"
     OCR_ENRICHMENT = "ocr_enrichment"
     GRAPH_BOOTSTRAP = "graph_bootstrap"
+    GRAPH_EXECUTION = "graph_execution"
+    RECOMMEND_NEXT_ACTION = "recommend_next_action"
     HUMAN_REVIEW = "human_review"
 
 

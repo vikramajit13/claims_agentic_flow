@@ -82,8 +82,40 @@ resource "aws_ecs_task_definition" "api" {
           value = "/app"
         },
         {
+          name  = "APP_ENV"
+          value = "dev"
+        },
+        {
           name  = "AWS_REGION"
           value = var.aws_region
+        },
+        {
+          name  = "LLM_PROVIDER"
+          value = var.llm_provider
+        },
+        {
+          name  = "DOCUMENT_INTELLIGENCE_MODEL"
+          value = var.document_intelligence_model
+        },
+        {
+          name  = "BEDROCK_MODEL_ID"
+          value = var.document_intelligence_model
+        },
+        {
+          name  = "ENABLE_LLM_DOCUMENT_INTELLIGENCE"
+          value = tostring(var.enable_llm_document_intelligence)
+        },
+        {
+          name  = "USE_MOCK_S3"
+          value = "false"
+        },
+        {
+          name  = "USE_MOCK_OCR"
+          value = "false"
+        },
+        {
+          name  = "USE_MOCK_SQS"
+          value = "false"
         },
         {
           name  = "S3_BUCKET_DEFAULT"
@@ -147,6 +179,22 @@ resource "aws_ecs_task_definition" "ocr_worker" {
         {
           name  = "AWS_REGION"
           value = var.aws_region
+        },
+        {
+          name  = "APP_ENV"
+          value = "dev"
+        },
+        {
+          name  = "USE_MOCK_S3"
+          value = "false"
+        },
+        {
+          name  = "USE_MOCK_OCR"
+          value = "false"
+        },
+        {
+          name  = "USE_MOCK_SQS"
+          value = "false"
         },
         {
           name  = "OCR_QUEUE_URL"

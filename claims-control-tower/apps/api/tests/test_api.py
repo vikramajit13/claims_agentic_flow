@@ -96,8 +96,8 @@ def test_start_workflow_from_submitted_claim(client: TestClient):
     )
     assert workflow_response.status_code == 200
     payload = workflow_response.json()
-    assert payload["status"] == "ready_for_graph"
-    assert payload["current_step"] == "graph_bootstrap"
+    assert payload["status"] == "waiting_for_human"
+    assert payload["current_step"] == "human_review"
 
 
 def test_internal_document_callbacks(client: TestClient):

@@ -25,7 +25,6 @@ resource "aws_lambda_function" "s3_event_to_ocr_queue" {
   environment {
     variables = {
       API_INTERNAL_BASE_URL             = "http://${aws_lb.api.dns_name}"
-      AWS_REGION                        = var.aws_region
       INTERNAL_SERVICE_TOKEN_SECRET_ARN = coalesce(var.internal_service_token_secret_arn, "")
       OCR_QUEUE_URL                     = aws_sqs_queue.ocr_jobs.id
     }
@@ -47,7 +46,6 @@ resource "aws_lambda_function" "ocr_queue_to_api" {
   environment {
     variables = {
       API_INTERNAL_BASE_URL             = "http://${aws_lb.api.dns_name}"
-      AWS_REGION                        = var.aws_region
       INTERNAL_SERVICE_TOKEN_SECRET_ARN = coalesce(var.internal_service_token_secret_arn, "")
     }
   }

@@ -100,9 +100,10 @@ def test_analyse_risk_flags_missing_invoice():
     assert result["current_step"] == "risk_analysis"
     assert result["requires_human_review"] is True
     assert result["risk_level"] == "HIGH"
-    assert "invoice_after_incident:1" in result["errors"]
-    assert "low_confidence_document:1" in result["errors"]
-    assert "low_quality_document:1" in result["errors"]
+    assert "invoice_after_incident:2" in result["errors"]
+    assert "low_quality_document:2" in result["errors"]
+    assert "missing_required_document:photo" in result["errors"]
+    assert "missing_required_document:repair_estimate" in result["errors"]
     assert any("Invoice date 2026-07-12 is after incident date 2026-07-10" in factor for factor in result["risk_factors"])
 
 def test_ocr_failed_document_flags_risk():
@@ -150,7 +151,6 @@ def test_ocr_failed_document_flags_risk():
     assert result["current_step"] == "risk_analysis"
     assert result["requires_human_review"] is True
     assert result["risk_level"] == "HIGH"
-    assert "OCR failed for document 2" in result["errors"]
+    assert "document_ocr_failed:2" in result["errors"]
     
     
-

@@ -62,6 +62,16 @@ data "aws_iam_policy_document" "task_access" {
       aws_sqs_queue.ocr_dlq.arn
     ]
   }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "textract:DetectDocumentText",
+      "bedrock:Converse",
+      "bedrock:InvokeModel"
+    ]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_role" "ecs_execution" {

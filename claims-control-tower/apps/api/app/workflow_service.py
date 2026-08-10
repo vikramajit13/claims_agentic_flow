@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from sqlalchemy import select
 
 from app.config import settings
 from app.db import ClaimDocumentRecord, ClaimRecord, WorkflowRunRecord, get_session
 from app.enums import ClaimStatus, DocumentStatus, OcrStatus, WorkflowStatus, WorkflowStep
+from app.graph.state import ClaimGraphState
+from app.graph.manager import GraphStateManagerFactory
 from app.observability import traceable
 from app.schemas import WorkflowRunResponse, WorkflowStartRequest
 
@@ -16,6 +19,9 @@ def _now():
 
 
 class WorkflowService:
+    def __init__(self) -> None:
+        self.graph_manager = GraphStateManagerFactory().create()
+
     @traceable(name="start_mock_claim_workflow", run_type="chain")
     async def start_claim_workflow(self, claim_id: int, request: WorkflowStartRequest) -> WorkflowRunResponse:
         async with get_session() as session:
@@ -51,10 +57,31 @@ class WorkflowService:
                 next_action = "Human checkpoint reached before graph execution."
                 claim.status = ClaimStatus.WAITING_FOR_HUMAN.value
             else:
-                status = WorkflowStatus.READY_FOR_GRAPH
-                step = WorkflowStep.GRAPH_BOOTSTRAP
-                next_action = "Claim is ready for graph orchestration."
-                claim.status = ClaimStatus.READY_FOR_GRAPH.value
+                graph_result = await self.graph_manager.ainvoke(
+                    ClaimGraphState(
+                        claim_id=claim_id,
+                        hitl_required=False,
+                        correlation_id=f"claim-{claim_id}-{uuid4()}",
+                    )
+                )
+
+                if graph_result.get("__interrupt__"):
+                    interrupt_payload = getattr(graph_result["__interrupt__"][0], "value", graph_result["__interrupt__"][0])
+                    status = WorkflowStatus.WAITING_FOR_HUMAN
+                    step = WorkflowStep.HUMAN_REVIEW
+                    next_action = interrupt_payload.get(
+                        "message",
+                        "Human checkpoint reached during graph execution.",
+                    )
+                    claim.status = ClaimStatus.WAITING_FOR_HUMAN.value
+                else:
+                    status = WorkflowStatus.READY_FOR_GRAPH
+                    step = WorkflowStep.RECOMMEND_NEXT_ACTION
+                    next_action = graph_result.get(
+                        "recommended_next_action_reason",
+                        "Claim graph executed successfully.",
+                    )
+                    claim.status = ClaimStatus.READY_FOR_GRAPH.value
 
             workflow = WorkflowRunRecord(
                 claim_id=claim_id,

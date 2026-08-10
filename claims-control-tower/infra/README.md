@@ -51,6 +51,11 @@ The dev environment expects these Secrets Manager ARNs in `infra/environments/de
 - `internal_service_token_secret_arn`
 - `langsmith_api_key_secret_arn` optional
 
+The dev ECS task also supports Bedrock-backed document intelligence through plain Terraform variables:
+
+- `llm_provider` set to `bedrock`
+- `document_intelligence_model` set to your Bedrock model ID
+
 `internal_service_token_secret_arn` should contain a plain string token. Terraform injects that secret into the ECS API task as `INTERNAL_SERVICE_TOKEN`, and both Lambdas read the same secret to authenticate their internal callback requests.
 
 ## GitHub Actions Alignment
@@ -101,6 +106,7 @@ Without that bootstrap apply, the GitHub deployment workflow will not be able to
    - a message landed in the OCR queue
    - the OCR queue Lambda ran
 9. Fetch the claim again from the API and confirm the document moved to `ocr_completed`.
+10. Start the workflow and confirm the graph executes instead of only stopping at `ready_for_graph`.
 
 ## Important
 
