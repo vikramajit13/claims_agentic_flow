@@ -134,6 +134,7 @@ The presign response now includes `upload_headers`. Your uploader must send thos
 ## Docker
 
 ```bash
+cp .env.example .env
 docker compose up --build
 ```
 
@@ -141,6 +142,12 @@ This starts:
 
 - `postgres` with pgvector
 - `api` on port `8000`
+
+Local Docker defaults are tuned for graph iteration:
+
+- `DEFAULT_HITL_REQUIRED=false`
+- Postgres-backed local state
+- mock S3/OCR/SQS so you can test the graph quickly
 
 ## Local Ollama Option
 
@@ -211,6 +218,18 @@ When Ollama is being used successfully, the document response should show:
 docker compose run --rm api pytest -q tests
 ```
 
+## Local Smoke Test
+
+```bash
+./scripts/local-dev-smoke.sh
+```
+
+Or from the repo root:
+
+```bash
+npm run local:smoke
+```
+
 ## Frontend Starter
 
 ```bash
@@ -247,3 +266,7 @@ Setup notes are in:
 Terraform infrastructure notes are in:
 
 - [infra/README.md](/Users/vikramsingh/claims_agentic_flow/claims-control-tower/infra/README.md)
+
+For the cost-saving local-first workflow and AWS teardown/recreate guidance, see:
+
+- [docs/local-dev-next-steps.md](/Users/vikramsingh/claims_agentic_flow/claims-control-tower/docs/local-dev-next-steps.md)

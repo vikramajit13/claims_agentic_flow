@@ -26,6 +26,7 @@ services:
       USE_MOCK_S3: "true"
       USE_MOCK_OCR: "true"
       USE_MOCK_SQS: "true"
+      DEFAULT_HITL_REQUIRED: ${DEFAULT_HITL_REQUIRED:-false}
       ENABLE_LLM_DOCUMENT_INTELLIGENCE: ${ENABLE_LLM_DOCUMENT_INTELLIGENCE:-false}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://host.docker.internal:11434/v1}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}

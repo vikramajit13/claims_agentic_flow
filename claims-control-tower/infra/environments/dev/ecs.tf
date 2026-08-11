@@ -98,6 +98,10 @@ resource "aws_ecs_task_definition" "api" {
           value = var.document_intelligence_model
         },
         {
+          name  = "OPENAI_BASE_URL"
+          value = var.openai_base_url
+        },
+        {
           name  = "BEDROCK_MODEL_ID"
           value = var.document_intelligence_model
         },
@@ -143,6 +147,12 @@ resource "aws_ecs_task_definition" "api" {
           {
             name      = "LANGSMITH_API_KEY"
             valueFrom = var.langsmith_api_key_secret_arn
+          }
+        ],
+        var.openai_api_key_secret_arn == null ? [] : [
+          {
+            name      = "OPENAI_API_KEY"
+            valueFrom = "${var.openai_api_key_secret_arn}:OPENAI_API_KEY::"
           }
         ]
       )

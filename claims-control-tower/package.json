@@ -6,6 +6,9 @@
   ],
   "scripts": {
     "api:test": "cd apps/api && pytest",
+    "local:up": "docker compose up --build",
+    "local:down": "docker compose down",
+    "local:smoke": "./scripts/local-dev-smoke.sh",
     "web:dev": "cd apps/web && npm run dev",
     "web:build": "cd apps/web && npm run build",
     "web:test:e2e": "cd apps/web && npm run test:e2e"

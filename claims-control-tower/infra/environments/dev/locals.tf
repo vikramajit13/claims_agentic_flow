@@ -20,6 +20,7 @@ locals {
   secret_arns = compact([
     var.database_url_secret_arn,
     var.langsmith_api_key_secret_arn,
+    var.openai_api_key_secret_arn,
     var.internal_service_token_secret_arn
   ])
 }

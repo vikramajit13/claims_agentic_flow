@@ -124,6 +124,12 @@ variable "langsmith_api_key_secret_arn" {
   default     = null
 }
 
+variable "openai_api_key_secret_arn" {
+  description = "Secrets Manager ARN for OPENAI_API_KEY."
+  type        = string
+  default     = null
+}
+
 variable "internal_service_token_secret_arn" {
   description = "Secrets Manager ARN for INTERNAL_SERVICE_TOKEN used by internal Lambda to API callbacks."
   type        = string
@@ -152,6 +158,12 @@ variable "document_intelligence_model" {
   description = "Model identifier used by document intelligence."
   type        = string
   default     = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+}
+
+variable "openai_base_url" {
+  description = "Base URL for OpenAI-compatible chat completions APIs."
+  type        = string
+  default     = "https://api.openai.com/v1"
 }
 
 variable "enable_llm_document_intelligence" {

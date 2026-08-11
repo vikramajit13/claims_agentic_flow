@@ -13,6 +13,12 @@ def _json(data: dict) -> str:
     return json.dumps(data, default=str)
 
 
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 @tool
 async def get_claim_history(customer_id: int, lookback_months: int = 12, exclude_claim_id: int | None = None) -> str:
     """Fetch prior claims for a customer within a configurable lookback window."""
@@ -24,7 +30,7 @@ async def get_claim_history(customer_id: int, lookback_months: int = 12, exclude
             query = query.where(ClaimRecord.id != exclude_claim_id)
         claims = (await session.execute(query.order_by(ClaimRecord.created_at.desc()))).scalars().all()
 
-    filtered = [claim for claim in claims if claim.created_at >= lookback_cutoff]
+    filtered = [claim for claim in claims if _as_utc(claim.created_at) >= lookback_cutoff]
     return _json(
         {
             "customer_id": customer_id,
