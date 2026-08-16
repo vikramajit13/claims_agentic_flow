@@ -33,17 +33,7 @@ class LLMClient:
             self._bedrock_client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
         return self._bedrock_client
 
-    @traceable(name="document_intelligence_llm_call", run_type="llm")
-    def create_document_intelligence(self, *, system_prompt: str, user_prompt: str) -> dict:
-        if not self.enabled:
-            raise RuntimeError("LLM document intelligence is not configured.")
-
-        if self.provider == "bedrock":
-            return self._create_document_intelligence_bedrock(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-            )
-
+    def _create_json_response_openai(self, *, system_prompt: str, user_prompt: str, model: str) -> dict:
         headers = {
             "Content-Type": "application/json",
         }
@@ -54,7 +44,7 @@ class LLMClient:
             f"{settings.openai_base_url.rstrip('/')}/chat/completions",
             headers=headers,
             json={
-                "model": settings.document_intelligence_model,
+                "model": model,
                 "temperature": 0,
                 "response_format": {"type": "json_object"},
                 "messages": [
@@ -69,7 +59,7 @@ class LLMClient:
         content = payload["choices"][0]["message"]["content"]
         return json.loads(content)
 
-    def _create_document_intelligence_bedrock(self, *, system_prompt: str, user_prompt: str) -> dict:
+    def _create_json_response_bedrock(self, *, system_prompt: str, user_prompt: str) -> dict:
         response = self._get_bedrock_client().converse(
             modelId=settings.bedrock_model_id,
             system=[{"text": system_prompt}],
@@ -90,3 +80,31 @@ class LLMClient:
         if not content:
             raise RuntimeError("Bedrock returned an empty response.")
         return json.loads(content)
+
+    def create_json_response(self, *, system_prompt: str, user_prompt: str, model: str) -> dict:
+        if self.provider == "bedrock":
+            return self._create_json_response_bedrock(system_prompt=system_prompt, user_prompt=user_prompt)
+        return self._create_json_response_openai(system_prompt=system_prompt, user_prompt=user_prompt, model=model)
+
+    @traceable(name="document_intelligence_llm_call", run_type="llm")
+    def create_document_intelligence(self, *, system_prompt: str, user_prompt: str) -> dict:
+        if not self.enabled:
+            raise RuntimeError("LLM document intelligence is not configured.")
+
+        return self.create_json_response(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=settings.document_intelligence_model,
+        )
+
+    @traceable(name="tool_selection_judge_llm_call", run_type="llm")
+    def judge_tool_selection(self, *, system_prompt: str, user_prompt: str) -> dict:
+        if not settings.enable_llm_tool_selection_judge:
+            raise RuntimeError("LLM tool-selection judge is not enabled.")
+        if not self._is_provider_configured():
+            raise RuntimeError("LLM provider is not configured.")
+        return self.create_json_response(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=settings.llm_judge_model,
+        )

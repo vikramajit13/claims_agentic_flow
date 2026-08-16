@@ -39,6 +39,7 @@ class WorkflowStep(StrEnum):
     GRAPH_EXECUTION = "graph_execution"
     RECOMMEND_NEXT_ACTION = "recommend_next_action"
     HUMAN_REVIEW = "human_review"
+    POST_HUMAN_REVIEW = "post_human_review"
 
 
 class RiskLevel(str, Enum):

@@ -93,8 +93,26 @@ class WorkflowRunRecord(Base):
     hitl_required: Mapped[bool] = mapped_column()
     next_action: Mapped[str] = mapped_column(Text)
     notes: Mapped[list[str]] = mapped_column(JSON, default=list)
+    graph_thread_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    graph_state_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[str] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[str] = mapped_column(DateTime(timezone=True))
+
+
+class HumanReviewRecord(Base):
+    __tablename__ = "human_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    workflow_run_id: Mapped[int] = mapped_column(Integer, index=True)
+    claim_id: Mapped[int] = mapped_column(Integer, index=True)
+    review_mode: Mapped[str] = mapped_column(String(50), index=True)
+    status: Mapped[str] = mapped_column(String(50), index=True)
+    thread_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    request_payload: Mapped[dict] = mapped_column(JSON)
+    decision_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class GraphCheckpointRecord(Base):
@@ -138,6 +156,7 @@ async def init_db() -> None:
                     await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
                 await connection.run_sync(Base.metadata.create_all)
                 await _ensure_claim_document_columns(connection)
+                await _ensure_workflow_run_columns(connection)
             return
         except OperationalError as exc:
             last_error = exc
@@ -186,3 +205,26 @@ async def _ensure_claim_document_columns(connection) -> None:
             if column_name in existing_names:
                 continue
             await connection.execute(text(f"ALTER TABLE claim_documents ADD COLUMN {column_name} {column_type}"))
+
+
+async def _ensure_workflow_run_columns(connection) -> None:
+    column_definitions = [
+        ("graph_thread_id", "TEXT"),
+        ("graph_state_snapshot", "JSON"),
+    ]
+    dialect = connection.dialect.name
+
+    if dialect == "postgresql":
+        for column_name, column_type in column_definitions:
+            await connection.execute(
+                text(f"ALTER TABLE workflow_runs ADD COLUMN IF NOT EXISTS {column_name} {column_type}")
+            )
+        return
+
+    if dialect == "sqlite":
+        existing_columns = await connection.execute(text("PRAGMA table_info(workflow_runs)"))
+        existing_names = {row[1] for row in existing_columns.fetchall()}
+        for column_name, column_type in column_definitions:
+            if column_name in existing_names:
+                continue
+            await connection.execute(text(f"ALTER TABLE workflow_runs ADD COLUMN {column_name} {column_type}"))

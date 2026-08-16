@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 from langchain_core.tools import tool
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 from app.db import ClaimDocumentRecord, ClaimRecord, WorkflowRunRecord, get_session
 
@@ -19,6 +20,20 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
+async def _safe_scalars_all(session, query) -> list:
+    try:
+        return (await session.execute(query)).scalars().all()
+    except OperationalError:
+        return []
+
+
+async def _safe_get(session, model, record_id):
+    try:
+        return await session.get(model, record_id)
+    except OperationalError:
+        return None
+
+
 @tool
 async def get_claim_history(customer_id: int, lookback_months: int = 12, exclude_claim_id: int | None = None) -> str:
     """Fetch prior claims for a customer within a configurable lookback window."""
@@ -28,7 +43,7 @@ async def get_claim_history(customer_id: int, lookback_months: int = 12, exclude
         query = select(ClaimRecord).where(ClaimRecord.customer_id == customer_id)
         if exclude_claim_id is not None:
             query = query.where(ClaimRecord.id != exclude_claim_id)
-        claims = (await session.execute(query.order_by(ClaimRecord.created_at.desc()))).scalars().all()
+        claims = await _safe_scalars_all(session, query.order_by(ClaimRecord.created_at.desc()))
 
     filtered = [claim for claim in claims if _as_utc(claim.created_at) >= lookback_cutoff]
     return _json(
@@ -59,7 +74,7 @@ async def get_prior_rejection_details(customer_id: int, exclude_claim_id: int | 
         query = select(ClaimRecord).where(ClaimRecord.customer_id == customer_id)
         if exclude_claim_id is not None:
             query = query.where(ClaimRecord.id != exclude_claim_id)
-        claims = (await session.execute(query.order_by(ClaimRecord.created_at.desc()))).scalars().all()
+        claims = await _safe_scalars_all(session, query.order_by(ClaimRecord.created_at.desc()))
 
     rejected_claims = [claim for claim in claims if str(claim.status).lower() == "rejected"]
     return _json(
@@ -87,7 +102,7 @@ async def get_customer_risk_overview(customer_id: int, exclude_claim_id: int | N
         query = select(ClaimRecord).where(ClaimRecord.customer_id == customer_id)
         if exclude_claim_id is not None:
             query = query.where(ClaimRecord.id != exclude_claim_id)
-        claims = (await session.execute(query.order_by(ClaimRecord.created_at.desc()))).scalars().all()
+        claims = await _safe_scalars_all(session, query.order_by(ClaimRecord.created_at.desc()))
 
     statuses: dict[str, int] = {}
     total_claim_amount = 0.0
@@ -147,13 +162,12 @@ async def get_document_metadata(claim_id: int, document_types: list[str] | None 
     normalized_filter = {item.strip().lower() for item in document_types or []}
 
     async with get_session() as session:
-        documents = (
-            await session.execute(
-                select(ClaimDocumentRecord)
-                .where(ClaimDocumentRecord.claim_id == claim_id)
-                .order_by(ClaimDocumentRecord.id.asc())
-            )
-        ).scalars().all()
+        documents = await _safe_scalars_all(
+            session,
+            select(ClaimDocumentRecord)
+            .where(ClaimDocumentRecord.claim_id == claim_id)
+            .order_by(ClaimDocumentRecord.id.asc()),
+        )
 
     payload_documents = []
     for document in documents:
@@ -186,13 +200,12 @@ async def get_document_text_evidence(
     normalized_filter = {item.strip().lower() for item in document_types or []}
 
     async with get_session() as session:
-        documents = (
-            await session.execute(
-                select(ClaimDocumentRecord)
-                .where(ClaimDocumentRecord.claim_id == claim_id)
-                .order_by(ClaimDocumentRecord.id.asc())
-            )
-        ).scalars().all()
+        documents = await _safe_scalars_all(
+            session,
+            select(ClaimDocumentRecord)
+            .where(ClaimDocumentRecord.claim_id == claim_id)
+            .order_by(ClaimDocumentRecord.id.asc()),
+        )
 
     evidence = []
     for document in documents:
@@ -222,21 +235,19 @@ async def get_document_text_evidence(
 async def get_claim_timeline(claim_id: int) -> str:
     """Return a normalized timeline of claim, document, and workflow events to support graph branching decisions."""
     async with get_session() as session:
-        claim = await session.get(ClaimRecord, claim_id)
-        documents = (
-            await session.execute(
-                select(ClaimDocumentRecord)
-                .where(ClaimDocumentRecord.claim_id == claim_id)
-                .order_by(ClaimDocumentRecord.created_at.asc())
-            )
-        ).scalars().all()
-        workflow_runs = (
-            await session.execute(
-                select(WorkflowRunRecord)
-                .where(WorkflowRunRecord.claim_id == claim_id)
-                .order_by(WorkflowRunRecord.created_at.asc())
-            )
-        ).scalars().all()
+        claim = await _safe_get(session, ClaimRecord, claim_id)
+        documents = await _safe_scalars_all(
+            session,
+            select(ClaimDocumentRecord)
+            .where(ClaimDocumentRecord.claim_id == claim_id)
+            .order_by(ClaimDocumentRecord.created_at.asc()),
+        )
+        workflow_runs = await _safe_scalars_all(
+            session,
+            select(WorkflowRunRecord)
+            .where(WorkflowRunRecord.claim_id == claim_id)
+            .order_by(WorkflowRunRecord.created_at.asc()),
+        )
 
     if claim is None:
         return _json({"claim_id": claim_id, "events": [], "claim_found": False})
@@ -288,14 +299,13 @@ async def get_guardrail_results(claim_id: int, workflow_run_id: str | None = Non
     del phase
 
     async with get_session() as session:
-        claim = await session.get(ClaimRecord, claim_id)
-        documents = (
-            await session.execute(
-                select(ClaimDocumentRecord)
-                .where(ClaimDocumentRecord.claim_id == claim_id)
-                .order_by(ClaimDocumentRecord.id.asc())
-            )
-        ).scalars().all()
+        claim = await _safe_get(session, ClaimRecord, claim_id)
+        documents = await _safe_scalars_all(
+            session,
+            select(ClaimDocumentRecord)
+            .where(ClaimDocumentRecord.claim_id == claim_id)
+            .order_by(ClaimDocumentRecord.id.asc()),
+        )
 
     if claim is None:
         return _json({"claim_id": claim_id, "overall_decision": "BLOCKED", "results": [{"code": "CLAIM_NOT_FOUND"}]})

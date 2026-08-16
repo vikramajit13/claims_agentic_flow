@@ -45,6 +45,10 @@ class ClaimGraphState(BaseModel):
     recommended_next_action_reason: str | None = None
     selected_investigation_graph: str | None = None
     selected_investigation_reason: str | None = None
+    investigation_plan: list[dict[str, str]] = Field(default_factory=list)
+    investigation_findings: list[str] = Field(default_factory=list)
+    tool_selection_judgment: dict[str, Any] | None = None
+    action_selection_judgment: dict[str, Any] | None = None
     tool_results: dict[str, Any] = Field(default_factory=dict)
     tool_catalog: list[dict[str, str]] = Field(default_factory=list)
     graph_catalog: list[dict[str, str]] = Field(default_factory=list)

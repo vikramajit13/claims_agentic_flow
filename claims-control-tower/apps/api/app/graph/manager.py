@@ -8,8 +8,10 @@ from app.graph.builder import (
     CLAIM_REVIEW_GRAPH,
     CUSTOMER_HISTORY_GRAPH,
     DOCUMENT_EVIDENCE_GRAPH,
+    GUARDRAIL_REVIEW_GRAPH,
     GraphBuilder,
     GraphDefinition,
+    POLICY_COVERAGE_GRAPH,
 )
 from app.graph.checkpoints import PostgresCheckpointStore
 from app.graph.runtime import GraphRuntime, GraphRuntimeConfig
@@ -73,6 +75,8 @@ class GraphStateManagerFactory:
         "claim_investigation": CLAIM_INVESTIGATION_GRAPH,
         "customer_history": CUSTOMER_HISTORY_GRAPH,
         "document_evidence": DOCUMENT_EVIDENCE_GRAPH,
+        "policy_coverage": POLICY_COVERAGE_GRAPH,
+        "guardrail_review": GUARDRAIL_REVIEW_GRAPH,
     }
 
     def __init__(self, config: GraphStateManagerFactoryConfig | None = None) -> None:
@@ -123,6 +127,18 @@ def build_customer_history_graph():
 def build_document_evidence_graph():
     return GraphStateManagerFactory(
         GraphStateManagerFactoryConfig(graph_key="document_evidence")
+    ).create().runtime.compiled()
+
+
+def build_policy_coverage_graph():
+    return GraphStateManagerFactory(
+        GraphStateManagerFactoryConfig(graph_key="policy_coverage")
+    ).create().runtime.compiled()
+
+
+def build_guardrail_review_graph():
+    return GraphStateManagerFactory(
+        GraphStateManagerFactoryConfig(graph_key="guardrail_review")
     ).create().runtime.compiled()
 
 

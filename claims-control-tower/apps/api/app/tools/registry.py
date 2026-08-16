@@ -51,6 +51,8 @@ GRAPH_TOOL_DESCRIPTIONS: dict[str, str] = {
     "investigate_claim_graph": "Standalone investigation graph for broad read-only claim evidence gathering.",
     "customer_history_graph": "Customer-history-focused graph for prior claims, rejections, and exposure patterns.",
     "document_evidence_graph": "Document-evidence-focused graph for OCR text, metadata, and timeline inspection.",
+    "policy_coverage_graph": "Policy-focused graph for coverage, deductible, and supporting document alignment.",
+    "guardrail_review_graph": "Guardrail-focused graph for deterministic pre-adjudication checks and evidence review.",
 }
 
 
@@ -58,6 +60,8 @@ GRAPH_SELECTION_CATALOG: dict[str, str] = {
     "investigate_claim_graph": "Use when the claim needs broad claim, policy, document, and guardrail context.",
     "customer_history_graph": "Use when customer behavior, prior rejections, or repeat-claim patterns matter most.",
     "document_evidence_graph": "Use when OCR text, extraction quality, or document sequencing should drive the investigation.",
+    "policy_coverage_graph": "Use when policy coverage, deductible, or claim-type alignment should be validated first.",
+    "guardrail_review_graph": "Use when deterministic checks or elevated claim amounts suggest a compliance-style review.",
 }
 
 
@@ -100,7 +104,7 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
         name="get_policy_coverage_summary",
         tool=get_policy_coverage_summary,
         description="Policy limit, deductible, and claim-type coverage summary.",
-        graphs=("claim_review_graph", "investigate_claim_graph"),
+        graphs=("claim_review_graph", "investigate_claim_graph", "policy_coverage_graph"),
         condition=_has_policy_and_not_seen("get_policy_coverage_summary"),
         args_builder=lambda state: {"policy_id": state.policy_id},
     ),
@@ -108,7 +112,7 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
         name="get_document_metadata",
         tool=get_document_metadata,
         description="Structured metadata for claim documents and extracted invoice fields.",
-        graphs=("claim_review_graph", "investigate_claim_graph", "document_evidence_graph"),
+        graphs=("claim_review_graph", "investigate_claim_graph", "document_evidence_graph", "policy_coverage_graph", "guardrail_review_graph"),
         condition=_not_seen("get_document_metadata"),
         args_builder=lambda state: {"claim_id": state.claim_id},
     ),
@@ -116,7 +120,7 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
         name="get_document_text_evidence",
         tool=get_document_text_evidence,
         description="Compact OCR and normalized-text snippets for the most relevant documents.",
-        graphs=("claim_review_graph", "investigate_claim_graph", "document_evidence_graph"),
+        graphs=("claim_review_graph", "investigate_claim_graph", "document_evidence_graph", "guardrail_review_graph"),
         condition=_has_documents_and_not_seen("get_document_text_evidence"),
         args_builder=lambda state: {"claim_id": state.claim_id, "max_documents": 3},
     ),
@@ -124,7 +128,14 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
         name="get_claim_timeline",
         tool=get_claim_timeline,
         description="Timeline of claim creation, document processing, and workflow events.",
-        graphs=("claim_review_graph", "investigate_claim_graph", "customer_history_graph", "document_evidence_graph"),
+        graphs=(
+            "claim_review_graph",
+            "investigate_claim_graph",
+            "customer_history_graph",
+            "document_evidence_graph",
+            "policy_coverage_graph",
+            "guardrail_review_graph",
+        ),
         condition=_not_seen("get_claim_timeline"),
         args_builder=lambda state: {"claim_id": state.claim_id},
     ),
@@ -132,7 +143,7 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
         name="get_guardrail_results",
         tool=get_guardrail_results,
         description="Deterministic guardrail decisions for pre-adjudication review.",
-        graphs=("claim_review_graph", "investigate_claim_graph", "document_evidence_graph"),
+        graphs=("claim_review_graph", "investigate_claim_graph", "document_evidence_graph", "guardrail_review_graph"),
         condition=_not_seen("get_guardrail_results"),
         args_builder=lambda state: {
             "claim_id": state.claim_id,
@@ -144,6 +155,7 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
 
 
 SAFE_READ_ONLY_TOOLS = {definition.name: definition.tool for definition in TOOL_DEFINITIONS}
+TOOL_DEFINITIONS_BY_NAME = {definition.name: definition for definition in TOOL_DEFINITIONS}
 
 
 def list_tool_catalog(graph_name: str) -> list[dict[str, str]]:
@@ -167,6 +179,18 @@ def get_tools_for_graph(graph_name: str) -> dict[str, Any]:
         definition.name: definition.tool
         for definition in TOOL_DEFINITIONS
         if graph_name in definition.graphs
+    }
+
+
+def build_named_tool_call(state: ClaimGraphState, graph_name: str, tool_name: str) -> dict[str, Any] | None:
+    definition = TOOL_DEFINITIONS_BY_NAME.get(tool_name)
+    if definition is None or graph_name not in definition.graphs:
+        return None
+    return {
+        "name": definition.name,
+        "args": definition.args_builder(state),
+        "id": f"tool-{uuid4()}",
+        "type": "tool_call",
     }
 
 

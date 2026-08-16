@@ -11,12 +11,26 @@ from app.graph.state import ClaimGraphState
 from app.nodes.analyse_risk import analyse_risk
 from app.nodes.human_review import human_in_the_loop_review
 from app.nodes.investigate_claims_node import claim_investigation_agent, merge_investigation_tool_results
+from app.nodes.judge_recommended_action import judge_recommended_action
+from app.nodes.judge_tool_selection import judge_tool_selection
 from app.nodes.post_human_review import post_human_review
-from app.nodes.recommend_next_action import recommend_next_action
-from app.nodes.select_investigation_graph import select_investigation_graph
+from app.nodes.recommend_next_action import merge_recommended_action, recommend_next_action
+from app.nodes.select_investigation_graph import merge_selected_investigation_graph, select_investigation_graph
 from app.nodes.start_claim import process_claim
 from app.nodes.validate_claim_context import validate_claim_context
-from app.tools import SAFE_READ_ONLY_TOOLS, get_tools_for_graph
+from app.tools import (
+    SAFE_READ_ONLY_TOOLS,
+    get_tools_for_graph,
+    recommend_broad_investigation_graph,
+    recommend_customer_history_graph,
+    recommend_document_evidence_graph,
+    recommend_guardrail_review_graph,
+    recommend_policy_coverage_graph,
+    recommend_block_claim_action,
+    recommend_human_review_action,
+    recommend_proceed_to_payment_action,
+    recommend_request_more_info_action,
+)
 
 
 class GraphBuilder(Protocol):
@@ -36,6 +50,7 @@ class BaseToolGraphBuilder:
     def build(self) -> StateGraph:
         workflow = StateGraph(ClaimGraphState)
         workflow.add_node("claim_investigation_agent", claim_investigation_agent)
+        workflow.add_node("judge_tool_selection", judge_tool_selection)
         available_tools = get_tools_for_graph(self.tool_graph_name) or SAFE_READ_ONLY_TOOLS
         workflow.add_node("read_only_tools", ToolNode(list(available_tools.values())))
         workflow.add_node("merge_investigation_tool_results", merge_investigation_tool_results)
@@ -43,7 +58,15 @@ class BaseToolGraphBuilder:
         workflow.add_edge(START, "claim_investigation_agent")
         workflow.add_conditional_edges(
             "claim_investigation_agent",
-            self._route_after_agent,
+            self._route_after_investigation_agent,
+            {
+                "judge_tool_selection": "judge_tool_selection",
+                "merge_investigation_tool_results": "merge_investigation_tool_results",
+            },
+        )
+        workflow.add_conditional_edges(
+            "judge_tool_selection",
+            self._route_after_judge,
             {
                 "read_only_tools": "read_only_tools",
                 "merge_investigation_tool_results": "merge_investigation_tool_results",
@@ -54,7 +77,15 @@ class BaseToolGraphBuilder:
         return workflow
 
     @staticmethod
-    def _route_after_agent(state: ClaimGraphState) -> str:
+    def _route_after_investigation_agent(state: ClaimGraphState) -> str:
+        if state.messages:
+            last_message = state.messages[-1]
+            if getattr(last_message, "tool_calls", None):
+                return "judge_tool_selection"
+        return "merge_investigation_tool_results"
+
+    @staticmethod
+    def _route_after_judge(state: ClaimGraphState) -> str:
         if state.messages:
             last_message = state.messages[-1]
             if getattr(last_message, "tool_calls", None):
@@ -73,22 +104,52 @@ class CustomerHistoryGraphBuilder(BaseToolGraphBuilder):
 class DocumentEvidenceGraphBuilder(BaseToolGraphBuilder):
     tool_graph_name = "document_evidence_graph"
 
+
+class PolicyCoverageGraphBuilder(BaseToolGraphBuilder):
+    tool_graph_name = "policy_coverage_graph"
+
+
+class GuardrailReviewGraphBuilder(BaseToolGraphBuilder):
+    tool_graph_name = "guardrail_review_graph"
+
 class ClaimReviewGraphBuilder:
     def build(self) -> StateGraph:
         workflow = StateGraph(ClaimGraphState)
+        selection_tools = [
+            recommend_document_evidence_graph,
+            recommend_guardrail_review_graph,
+            recommend_customer_history_graph,
+            recommend_policy_coverage_graph,
+            recommend_broad_investigation_graph,
+        ]
+        action_tools = [
+            recommend_human_review_action,
+            recommend_request_more_info_action,
+            recommend_block_claim_action,
+            recommend_proceed_to_payment_action,
+        ]
         investigation_subgraph = InvestigationGraphBuilder().build().compile()
         customer_history_subgraph = CustomerHistoryGraphBuilder().build().compile()
         document_evidence_subgraph = DocumentEvidenceGraphBuilder().build().compile()
+        policy_coverage_subgraph = PolicyCoverageGraphBuilder().build().compile()
+        guardrail_review_subgraph = GuardrailReviewGraphBuilder().build().compile()
         workflow.add_node("process_claim", process_claim)
         workflow.add_node("validate_claim_context", validate_claim_context)
         workflow.add_node("analyse_risk", analyse_risk)
         workflow.add_node("select_investigation_graph", select_investigation_graph)
+        workflow.add_node("investigation_selection_tools", ToolNode(selection_tools))
+        workflow.add_node("merge_selected_investigation_graph", merge_selected_investigation_graph)
         workflow.add_node("claim_investigation", investigation_subgraph)
         workflow.add_node("customer_history_investigation", customer_history_subgraph)
         workflow.add_node("document_evidence_investigation", document_evidence_subgraph)
+        workflow.add_node("policy_coverage_investigation", policy_coverage_subgraph)
+        workflow.add_node("guardrail_review_investigation", guardrail_review_subgraph)
         workflow.add_node("human_review", human_in_the_loop_review)
         workflow.add_node("post_human_review", post_human_review)
         workflow.add_node("recommend_next_action", recommend_next_action)
+        workflow.add_node("judge_recommended_action", judge_recommended_action)
+        workflow.add_node("action_recommendation_tools", ToolNode(action_tools))
+        workflow.add_node("merge_recommended_action", merge_recommended_action)
 
         workflow.add_edge(START, "process_claim")
         workflow.add_edge("process_claim", "validate_claim_context")
@@ -103,18 +164,48 @@ class ClaimReviewGraphBuilder:
         workflow.add_edge("analyse_risk", "select_investigation_graph")
         workflow.add_conditional_edges(
             "select_investigation_graph",
+            self._route_after_graph_selection_agent,
+            {
+                "investigation_selection_tools": "investigation_selection_tools",
+                "merge_selected_investigation_graph": "merge_selected_investigation_graph",
+            },
+        )
+        workflow.add_edge("investigation_selection_tools", "merge_selected_investigation_graph")
+        workflow.add_conditional_edges(
+            "merge_selected_investigation_graph",
             self._route_investigation_graph,
             {
                 "claim_investigation": "claim_investigation",
                 "customer_history_investigation": "customer_history_investigation",
                 "document_evidence_investigation": "document_evidence_investigation",
+                "policy_coverage_investigation": "policy_coverage_investigation",
+                "guardrail_review_investigation": "guardrail_review_investigation",
             },
         )
         workflow.add_edge("claim_investigation", "recommend_next_action")
         workflow.add_edge("customer_history_investigation", "recommend_next_action")
         workflow.add_edge("document_evidence_investigation", "recommend_next_action")
+        workflow.add_edge("policy_coverage_investigation", "recommend_next_action")
+        workflow.add_edge("guardrail_review_investigation", "recommend_next_action")
         workflow.add_conditional_edges(
             "recommend_next_action",
+            self._route_after_recommendation_agent,
+            {
+                "judge_recommended_action": "judge_recommended_action",
+                "merge_recommended_action": "merge_recommended_action",
+            },
+        )
+        workflow.add_conditional_edges(
+            "judge_recommended_action",
+            self._route_after_action_judge,
+            {
+                "action_recommendation_tools": "action_recommendation_tools",
+                "merge_recommended_action": "merge_recommended_action",
+            },
+        )
+        workflow.add_edge("action_recommendation_tools", "merge_recommended_action")
+        workflow.add_conditional_edges(
+            "merge_recommended_action",
             self._route_after_recommendation,
             {
                 NextWorkflowAction.CREATE_HUMAN_REVIEW_TASK.value: "human_review",
@@ -133,13 +224,41 @@ class ClaimReviewGraphBuilder:
         return "analyse_risk"
 
     @staticmethod
+    def _route_after_graph_selection_agent(state: ClaimGraphState) -> str:
+        if state.messages:
+            last_message = state.messages[-1]
+            if getattr(last_message, "tool_calls", None):
+                return "investigation_selection_tools"
+        return "merge_selected_investigation_graph"
+
+    @staticmethod
     def _route_investigation_graph(state: ClaimGraphState) -> str:
         selected_graph = state.selected_investigation_graph or "investigate_claim_graph"
         if selected_graph == "customer_history_graph":
             return "customer_history_investigation"
         if selected_graph == "document_evidence_graph":
             return "document_evidence_investigation"
+        if selected_graph == "policy_coverage_graph":
+            return "policy_coverage_investigation"
+        if selected_graph == "guardrail_review_graph":
+            return "guardrail_review_investigation"
         return "claim_investigation"
+
+    @staticmethod
+    def _route_after_recommendation_agent(state: ClaimGraphState) -> str:
+        if state.messages:
+            last_message = state.messages[-1]
+            if getattr(last_message, "tool_calls", None):
+                return "judge_recommended_action"
+        return "merge_recommended_action"
+
+    @staticmethod
+    def _route_after_action_judge(state: ClaimGraphState) -> str:
+        if state.messages:
+            last_message = state.messages[-1]
+            if getattr(last_message, "tool_calls", None):
+                return "action_recommendation_tools"
+        return "merge_recommended_action"
 
     @staticmethod
     def _route_after_recommendation(state: ClaimGraphState) -> str:
@@ -168,4 +287,16 @@ DOCUMENT_EVIDENCE_GRAPH = GraphDefinition(
     name="document_evidence_graph",
     version="v1",
     builder_factory=DocumentEvidenceGraphBuilder,
+)
+
+POLICY_COVERAGE_GRAPH = GraphDefinition(
+    name="policy_coverage_graph",
+    version="v1",
+    builder_factory=PolicyCoverageGraphBuilder,
+)
+
+GUARDRAIL_REVIEW_GRAPH = GraphDefinition(
+    name="guardrail_review_graph",
+    version="v1",
+    builder_factory=GuardrailReviewGraphBuilder,
 )

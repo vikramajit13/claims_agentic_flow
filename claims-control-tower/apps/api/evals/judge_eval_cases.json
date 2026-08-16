@@ -1,0 +1,40 @@
+[
+  {
+    "name": "missing_tool_blocking_case",
+    "judge_type": "tool",
+    "risk_score": 85,
+    "risk_level": "HIGH",
+    "selected_graph": "customer_history_graph",
+    "selected_tools": ["get_claim_history"],
+    "judge_response": {
+      "approved": false,
+      "rationale": "Need aggregate customer risk context.",
+      "missing_tools": ["get_customer_risk_overview"],
+      "unnecessary_tools": []
+    },
+    "expected": {
+      "mode": "blocking",
+      "applied": true,
+      "tool_names_include": ["get_customer_risk_overview"]
+    }
+  },
+  {
+    "name": "wrong_tool_advisory_case",
+    "judge_type": "tool",
+    "risk_score": 15,
+    "risk_level": "LOW",
+    "selected_graph": "customer_history_graph",
+    "selected_tools": ["get_claim_history", "get_document_metadata"],
+    "judge_response": {
+      "approved": false,
+      "rationale": "Document metadata is not needed for customer-history review.",
+      "missing_tools": [],
+      "unnecessary_tools": ["get_document_metadata"]
+    },
+    "expected": {
+      "mode": "advisory",
+      "applied": false,
+      "tool_names_include": ["get_document_metadata"]
+    }
+  }
+]

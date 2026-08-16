@@ -1,7 +1,9 @@
 import { ActivityLogPanel } from "./components/activity-log-panel";
+import { AgentTracePanel } from "./components/agent-trace-panel";
 import { ClaimFormPanel } from "./components/claim-form-panel";
 import { DocumentUploadPanel } from "./components/document-upload-panel";
 import { HeroSection } from "./components/hero-section";
+import { HumanReviewInboxPanel } from "./components/human-review-inbox-panel";
 import { WorkflowPanel } from "./components/workflow-panel";
 import { useClaimIntakeStore } from "@/store/claim-intake-store";
 import { useClaimForm } from "./hooks/use-claim-form";
@@ -74,6 +76,19 @@ export function ClaimIntakePage() {
           }}
         />
         <ActivityLogPanel entries={activityLog} />
+      </section>
+
+      <section className="mt-6 grid gap-5 xl:grid-cols-2">
+        <HumanReviewInboxPanel
+          activeClaim={session.activeClaim}
+          onReviewResolved={async () => {
+            if (!session.activeClaim) {
+              return;
+            }
+            await session.refreshClaim(session.activeClaim.id);
+          }}
+        />
+        <AgentTracePanel claimId={session.activeClaim?.id ?? null} />
       </section>
     </main>
   );

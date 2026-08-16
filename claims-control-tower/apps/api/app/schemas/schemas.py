@@ -87,9 +87,49 @@ class WorkflowRunResponse(BaseModel):
     current_step: WorkflowStep
     hitl_required: bool
     next_action: str
+    human_review_id: int | None = None
+    graph_thread_id: str | None = None
     notes: list[str] = Field(default_factory=list)
     created_at: str
     updated_at: str
+
+
+class HumanReviewDecisionRequest(BaseModel):
+    decision: str
+    notes: str | None = None
+
+
+class HumanReviewResponse(BaseModel):
+    id: int
+    workflow_run_id: int
+    claim_id: int
+    review_mode: str
+    status: str
+    thread_id: str | None = None
+    request_payload: dict
+    decision_payload: dict | None = None
+    resolved_at: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class WorkflowTraceEvent(BaseModel):
+    id: str
+    stage: str
+    title: str
+    detail: str
+    status: str = "info"
+    timestamp: str | None = None
+    metadata: dict = Field(default_factory=dict)
+
+
+class WorkflowTraceResponse(BaseModel):
+    claim_id: int
+    workflow_run_id: int | None = None
+    graph_thread_id: str | None = None
+    workflow_status: str | None = None
+    current_step: str | None = None
+    events: list[WorkflowTraceEvent] = Field(default_factory=list)
 
 
 class InternalS3ObjectCreatedRequest(BaseModel):

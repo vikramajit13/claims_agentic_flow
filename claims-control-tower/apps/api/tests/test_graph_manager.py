@@ -14,6 +14,8 @@ def test_graph_manager_compiles():
 def test_graph_manager_supports_new_graph_keys():
     assert GraphStateManagerFactory.get_definition("customer_history").name == "customer_history_graph"
     assert GraphStateManagerFactory.get_definition("document_evidence").name == "document_evidence_graph"
+    assert GraphStateManagerFactory.get_definition("policy_coverage").name == "policy_coverage_graph"
+    assert GraphStateManagerFactory.get_definition("guardrail_review").name == "guardrail_review_graph"
 
 
 def test_start_claim_node_loads_claim_context(client):

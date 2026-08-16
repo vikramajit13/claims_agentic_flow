@@ -98,6 +98,71 @@ def test_start_workflow_from_submitted_claim(client: TestClient):
     payload = workflow_response.json()
     assert payload["status"] == "waiting_for_human"
     assert payload["current_step"] == "human_review"
+    assert payload["human_review_id"] is not None
+    assert payload["graph_thread_id"] is not None
+
+
+def test_resume_persisted_human_review(client: TestClient):
+    claim = client.post(
+        "/v1/claims",
+        json={
+            "claim_number": "MONO-003A",
+            "customer_id": 31,
+            "claim_type": "motor",
+        },
+    ).json()
+    client.post(
+        f"/v1/claims/{claim['id']}/documents/presign",
+        json={"file_name": "photo.jpg", "run_ocr": False},
+    )
+    claim_state = client.get(f"/v1/claims/{claim['id']}").json()
+    document_id = claim_state["documents"][0]["id"]
+    client.post(
+        f"/v1/claims/{claim['id']}/documents/{document_id}/complete-upload",
+        json={},
+    )
+
+    workflow_response = client.post(
+        f"/v1/workflows/claims/{claim['id']}/start",
+        json={"hitl_required": False, "notes": ["Wait for HITL"]},
+    )
+    assert workflow_response.status_code == 200
+    workflow_payload = workflow_response.json()
+    review_id = workflow_payload["human_review_id"]
+
+    review_response = client.get(f"/v1/workflows/human-reviews/{review_id}")
+    assert review_response.status_code == 200
+    assert review_response.json()["status"] == "pending"
+    assert review_response.json()["thread_id"] == workflow_payload["graph_thread_id"]
+
+    inbox_response = client.get("/v1/workflows/human-reviews")
+    assert inbox_response.status_code == 200
+    assert any(item["id"] == review_id for item in inbox_response.json())
+
+    trace_response = client.get(f"/v1/workflows/claims/{claim['id']}/trace")
+    assert trace_response.status_code == 200
+    trace_payload = trace_response.json()
+    assert trace_payload["claim_id"] == claim["id"]
+    assert any(event["stage"] == "graph_selection" for event in trace_payload["events"])
+    assert any(event["stage"] == "human_review" for event in trace_payload["events"])
+
+    resume_response = client.post(
+        f"/v1/workflows/human-reviews/{review_id}/resume",
+        json={"decision": "approve", "notes": "Reviewed and approved."},
+    )
+    assert resume_response.status_code == 200
+    resumed_payload = resume_response.json()
+    assert resumed_payload["status"] == "resolved"
+    assert resumed_payload["decision_payload"]["decision"] == "approve"
+    assert resumed_payload["resolved_at"] is not None
+
+    second_get = client.get(f"/v1/workflows/human-reviews/{review_id}")
+    assert second_get.status_code == 200
+    assert second_get.json()["status"] == "resolved"
+
+    resolved_trace = client.get(f"/v1/workflows/claims/{claim['id']}/trace")
+    assert resolved_trace.status_code == 200
+    assert any(event["detail"] == "Reviewed and approved." for event in resolved_trace.json()["events"])
 
 
 def test_internal_document_callbacks(client: TestClient):
