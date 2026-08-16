@@ -6,6 +6,8 @@ from typing import Any
 from app.graph.builder import (
     CLAIM_INVESTIGATION_GRAPH,
     CLAIM_REVIEW_GRAPH,
+    CUSTOMER_HISTORY_GRAPH,
+    DOCUMENT_EVIDENCE_GRAPH,
     GraphBuilder,
     GraphDefinition,
 )
@@ -69,6 +71,8 @@ class GraphStateManagerFactory:
     GRAPH_REGISTRY: dict[str, GraphDefinition] = {
         "claim_review": CLAIM_REVIEW_GRAPH,
         "claim_investigation": CLAIM_INVESTIGATION_GRAPH,
+        "customer_history": CUSTOMER_HISTORY_GRAPH,
+        "document_evidence": DOCUMENT_EVIDENCE_GRAPH,
     }
 
     def __init__(self, config: GraphStateManagerFactoryConfig | None = None) -> None:
@@ -107,6 +111,18 @@ def build_claim_graph():
 def build_investigation_graph():
     return GraphStateManagerFactory(
         GraphStateManagerFactoryConfig(graph_key="claim_investigation")
+    ).create().runtime.compiled()
+
+
+def build_customer_history_graph():
+    return GraphStateManagerFactory(
+        GraphStateManagerFactoryConfig(graph_key="customer_history")
+    ).create().runtime.compiled()
+
+
+def build_document_evidence_graph():
+    return GraphStateManagerFactory(
+        GraphStateManagerFactoryConfig(graph_key="document_evidence")
     ).create().runtime.compiled()
 
 

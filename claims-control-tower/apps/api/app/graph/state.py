@@ -43,7 +43,11 @@ class ClaimGraphState(BaseModel):
     correlation_id: str | None = None
     recommended_next_action: str | None = None
     recommended_next_action_reason: str | None = None
+    selected_investigation_graph: str | None = None
+    selected_investigation_reason: str | None = None
     tool_results: dict[str, Any] = Field(default_factory=dict)
+    tool_catalog: list[dict[str, str]] = Field(default_factory=list)
+    graph_catalog: list[dict[str, str]] = Field(default_factory=list)
     messages: Annotated[list[AnyMessage], add_messages] = Field(default_factory=list)
     investigation_notes: list[str] = Field(default_factory=list)
     investigation_errors: list[str] = Field(default_factory=list)

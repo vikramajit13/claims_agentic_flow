@@ -2,84 +2,27 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from uuid import uuid4
 
 from langchain_core.messages import AIMessage, ToolMessage
 
 from app.graph.state import ClaimGraphState
+from app.tools import build_tool_calls_for_graph, list_graph_catalog, list_tool_catalog
+
+
+GRAPH_TOOL_FALLBACK = "investigate_claim_graph"
 
 
 def build_investigation_tool_calls(state: ClaimGraphState) -> list[dict[str, Any]]:
-    existing_results = set(state.tool_results.keys())
-    tool_calls: list[dict[str, Any]] = []
-
-    if state.customer_id is not None and "get_claim_history" not in existing_results:
-        tool_calls.append(
-            {
-                "name": "get_claim_history",
-                "args": {
-                    "customer_id": state.customer_id,
-                    "lookback_months": 12,
-                    "exclude_claim_id": state.claim_id,
-                },
-                "id": f"tool-{uuid4()}",
-                "type": "tool_call",
-            }
-        )
-
-    if state.customer_id is not None and "get_prior_rejection_details" not in existing_results:
-        tool_calls.append(
-            {
-                "name": "get_prior_rejection_details",
-                "args": {
-                    "customer_id": state.customer_id,
-                    "exclude_claim_id": state.claim_id,
-                },
-                "id": f"tool-{uuid4()}",
-                "type": "tool_call",
-            }
-        )
-
-    if state.policy_id and "get_policy_coverage_summary" not in existing_results:
-        tool_calls.append(
-            {
-                "name": "get_policy_coverage_summary",
-                "args": {"policy_id": state.policy_id},
-                "id": f"tool-{uuid4()}",
-                "type": "tool_call",
-            }
-        )
-
-    if "get_document_metadata" not in existing_results:
-        tool_calls.append(
-            {
-                "name": "get_document_metadata",
-                "args": {"claim_id": state.claim_id},
-                "id": f"tool-{uuid4()}",
-                "type": "tool_call",
-            }
-        )
-
-    if "get_guardrail_results" not in existing_results:
-        tool_calls.append(
-            {
-                "name": "get_guardrail_results",
-                "args": {
-                    "claim_id": state.claim_id,
-                    "workflow_run_id": state.graph_run_id,
-                    "phase": "PRE_ADJUDICATION",
-                },
-                "id": f"tool-{uuid4()}",
-                "type": "tool_call",
-            }
-        )
-
-    return tool_calls
+    graph_name = state.selected_investigation_graph or state.graph_name or GRAPH_TOOL_FALLBACK
+    return build_tool_calls_for_graph(state, graph_name)
 
 
 def claim_investigation_agent(state: ClaimGraphState) -> dict[str, Any]:
     tool_calls = build_investigation_tool_calls(state)
     notes = list(state.investigation_notes)
+    graph_name = state.selected_investigation_graph or state.graph_name or GRAPH_TOOL_FALLBACK
+    tool_catalog = list_tool_catalog(graph_name)
+    graph_catalog = list_graph_catalog()
 
     if not tool_calls:
         notes.append("No additional read-only investigation tools were required.")
@@ -87,14 +30,18 @@ def claim_investigation_agent(state: ClaimGraphState) -> dict[str, Any]:
             "current_step": "claim_investigation",
             "investigation_required": False,
             "investigation_notes": notes,
+            "tool_catalog": tool_catalog,
+            "graph_catalog": graph_catalog,
             "completed_steps": [*state.completed_steps, "claim_investigation"],
         }
 
-    notes.append(f"Investigation agent selected {len(tool_calls)} read-only tool call(s).")
+    notes.append(f"Investigation agent selected {len(tool_calls)} read-only tool call(s) for {graph_name}.")
     return {
         "current_step": "claim_investigation",
         "investigation_required": True,
         "investigation_notes": notes,
+        "tool_catalog": tool_catalog,
+        "graph_catalog": graph_catalog,
         "completed_steps": [*state.completed_steps, "claim_investigation"],
         "messages": [AIMessage(content="Investigating claim context with read-only tools.", tool_calls=tool_calls)],
     }

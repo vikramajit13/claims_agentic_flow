@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from langchain_core.tools import tool
 from sqlalchemy import select
 
-from app.db import ClaimDocumentRecord, ClaimRecord, get_session
+from app.db import ClaimDocumentRecord, ClaimRecord, WorkflowRunRecord, get_session
 
 
 def _json(data: dict) -> str:
@@ -81,6 +81,40 @@ async def get_prior_rejection_details(customer_id: int, exclude_claim_id: int | 
 
 
 @tool
+async def get_customer_risk_overview(customer_id: int, exclude_claim_id: int | None = None) -> str:
+    """Summarize prior customer claim volume, statuses, and exposure to help the LLM choose follow-up tools."""
+    async with get_session() as session:
+        query = select(ClaimRecord).where(ClaimRecord.customer_id == customer_id)
+        if exclude_claim_id is not None:
+            query = query.where(ClaimRecord.id != exclude_claim_id)
+        claims = (await session.execute(query.order_by(ClaimRecord.created_at.desc()))).scalars().all()
+
+    statuses: dict[str, int] = {}
+    total_claim_amount = 0.0
+    rejected_count = 0
+    open_count = 0
+    for claim in claims:
+        normalized_status = str(claim.status).lower()
+        statuses[normalized_status] = statuses.get(normalized_status, 0) + 1
+        total_claim_amount += float(claim.claim_amount or 0)
+        if normalized_status == "rejected":
+            rejected_count += 1
+        if normalized_status not in {"rejected", "closed", "paid"}:
+            open_count += 1
+
+    return _json(
+        {
+            "customer_id": customer_id,
+            "claim_count": len(claims),
+            "status_counts": statuses,
+            "rejected_claim_count": rejected_count,
+            "open_claim_count": open_count,
+            "total_claim_amount": round(total_claim_amount, 2),
+        }
+    )
+
+
+@tool
 async def get_policy_coverage_summary(policy_id: str) -> str:
     """Return a mocked policy summary including dates, status, limits, deductible, and covered claim types."""
     numeric_portion = "".join(char for char in policy_id if char.isdigit()) or "1"
@@ -140,6 +174,111 @@ async def get_document_metadata(claim_id: int, document_types: list[str] | None 
         )
 
     return _json({"claim_id": claim_id, "documents": payload_documents})
+
+
+@tool
+async def get_document_text_evidence(
+    claim_id: int,
+    document_types: list[str] | None = None,
+    max_documents: int = 3,
+) -> str:
+    """Return compact document evidence snippets and extraction quality for LLM-led investigation."""
+    normalized_filter = {item.strip().lower() for item in document_types or []}
+
+    async with get_session() as session:
+        documents = (
+            await session.execute(
+                select(ClaimDocumentRecord)
+                .where(ClaimDocumentRecord.claim_id == claim_id)
+                .order_by(ClaimDocumentRecord.id.asc())
+            )
+        ).scalars().all()
+
+    evidence = []
+    for document in documents:
+        resolved_type = (document.normalized_document_type or "").lower()
+        if normalized_filter and resolved_type not in normalized_filter:
+            continue
+
+        snippet_source = document.normalized_text or document.ocr_text or ""
+        evidence.append(
+            {
+                "document_id": document.id,
+                "document_type": document.normalized_document_type or document.file_name,
+                "snippet": snippet_source[:280],
+                "has_more_text": len(snippet_source) > 280,
+                "confidence": document.normalized_confidence,
+                "review_recommended": bool((document.quality_assessment or {}).get("review_recommended", False)),
+                "extracted_fields": document.extracted_fields or {},
+            }
+        )
+        if len(evidence) >= max(max_documents, 1):
+            break
+
+    return _json({"claim_id": claim_id, "documents": evidence})
+
+
+@tool
+async def get_claim_timeline(claim_id: int) -> str:
+    """Return a normalized timeline of claim, document, and workflow events to support graph branching decisions."""
+    async with get_session() as session:
+        claim = await session.get(ClaimRecord, claim_id)
+        documents = (
+            await session.execute(
+                select(ClaimDocumentRecord)
+                .where(ClaimDocumentRecord.claim_id == claim_id)
+                .order_by(ClaimDocumentRecord.created_at.asc())
+            )
+        ).scalars().all()
+        workflow_runs = (
+            await session.execute(
+                select(WorkflowRunRecord)
+                .where(WorkflowRunRecord.claim_id == claim_id)
+                .order_by(WorkflowRunRecord.created_at.asc())
+            )
+        ).scalars().all()
+
+    if claim is None:
+        return _json({"claim_id": claim_id, "events": [], "claim_found": False})
+
+    events = [
+        {
+            "type": "claim_created",
+            "timestamp": claim.created_at.isoformat(),
+            "status": claim.status,
+            "detail": claim.claim_number,
+        }
+    ]
+    for document in documents:
+        events.append(
+            {
+                "type": "document_recorded",
+                "timestamp": document.created_at.isoformat(),
+                "status": document.upload_status,
+                "detail": document.file_name,
+            }
+        )
+        if document.normalized_at is not None:
+            events.append(
+                {
+                    "type": "document_normalized",
+                    "timestamp": document.normalized_at.isoformat(),
+                    "status": document.ocr_status,
+                    "detail": document.normalized_document_type or document.file_name,
+                }
+            )
+    for workflow_run in workflow_runs:
+        events.append(
+            {
+                "type": "workflow_run",
+                "timestamp": workflow_run.created_at.isoformat(),
+                "status": workflow_run.status,
+                "detail": workflow_run.current_step,
+            }
+        )
+
+    events.sort(key=lambda item: item["timestamp"])
+    return _json({"claim_id": claim_id, "claim_found": True, "events": events})
 
 
 @tool

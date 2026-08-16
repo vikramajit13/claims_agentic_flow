@@ -11,6 +11,11 @@ def test_graph_manager_compiles():
     assert graph is not None
 
 
+def test_graph_manager_supports_new_graph_keys():
+    assert GraphStateManagerFactory.get_definition("customer_history").name == "customer_history_graph"
+    assert GraphStateManagerFactory.get_definition("document_evidence").name == "document_evidence_graph"
+
+
 def test_start_claim_node_loads_claim_context(client):
     claim = client.post(
         "/v1/claims",
