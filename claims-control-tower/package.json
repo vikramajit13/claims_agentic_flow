@@ -2,10 +2,14 @@
   "name": "claims-control-tower",
   "private": true,
   "workspaces": [
+    "apps/dorrigo",
     "apps/web"
   ],
   "scripts": {
     "api:test": "cd apps/api && pytest",
+    "dorrigo:dev": "cd apps/dorrigo && npm run dev",
+    "dorrigo:build": "cd apps/dorrigo && npm run build",
+    "dorrigo:preview": "cd apps/dorrigo && npm run preview",
     "local:up": "docker compose up --build",
     "local:down": "docker compose down",
     "local:smoke": "./scripts/local-dev-smoke.sh",
